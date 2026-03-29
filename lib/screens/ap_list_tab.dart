@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/wifi_data.dart';
 
@@ -14,6 +15,23 @@ class ApListTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (apList.isEmpty) {
+      if (kIsWeb) {
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.smartphone, size: 56, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('AP 스캔은 Android 앱에서만 지원됩니다',
+                  style: TextStyle(fontSize: 15, color: Colors.grey)),
+              SizedBox(height: 8),
+              Text('브라우저(iOS/웹) 환경에서는 보안 정책상\n주변 WiFi 목록을 읽을 수 없습니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        );
+      }
       return const Center(
         child: Text('주변 AP를 탐지하지 못했습니다.\n새로고침을 시도해보세요.',
           textAlign: TextAlign.center,

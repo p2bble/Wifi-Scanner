@@ -4,6 +4,10 @@
 
 네트워크를 잘 모르는 개발자가 현장에 갔을 때, 지금 이 자리의 WiFi 환경이 어떤 상태인지 빠르게 파악하고 팀에 공유할 수 있도록 만들어진 앱입니다.
 
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
+[![Version](https://img.shields.io/badge/Version-1.2.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+
 ---
 
 ## 주요 기능
@@ -134,11 +138,54 @@ flutter run
 |--------|:-------:|:---------:|------|
 | Android | ✅ | ✅ | 위치 권한 필요 |
 | iOS | ❌ | 연결된 것만 | Apple 정책으로 AP 목록 스캔 불가 |
-| Web | ❌ | ❌ | 브라우저 WiFi API 없음 |
+| Web (PWA) | ❌ | ❌ | 브라우저 WiFi API 없음, 연결정보/리포트 탭은 일부 동작 |
+
+---
+
+## 🌐 Web PWA 배포 (iPhone / 브라우저 지원)
+
+Apple Developer 계정 없이 iPhone 사용자도 웹 브라우저로 앱을 사용할 수 있도록 **Progressive Web App(PWA)** 로 배포되어 있습니다.
+
+### 접속 방법
+
+**GitHub Pages URL (배포 예정):**
+```
+https://p2bble.github.io/wifi_scout/
+```
+
+### iPhone에서 홈 화면 추가 방법
+1. Safari로 위 URL 접속
+2. 하단 공유 버튼(□↑) 탭
+3. "홈 화면에 추가" 선택
+4. 앱 아이콘이 홈 화면에 추가됨 → 앱처럼 실행
+
+> **참고:** iOS 정책상 WiFi 스캔(AP 목록, 채널 현황, 음영 추적)은 동작하지 않습니다.
+> 브라우저에서 접속 시 각 탭에 "지원하지 않는 환경" 안내가 표시됩니다.
+
+### 로컬 테스트
+```bash
+flutter build web --release
+python -m http.server 8080 --directory build/web
+# http://localhost:8080 접속
+```
+
+### GitHub Pages 배포
+```bash
+flutter build web --release --base-href "/wifi_scout/"
+# build/web/ 내용을 gh-pages 브랜치에 push
+```
 
 ---
 
 ## 버전 히스토리
+
+### v1.2.0 (2026-03-29)
+- **Web PWA 지원 추가**: iPhone / 브라우저 사용자를 위한 Progressive Web App 배포
+- 웹 접속 시 크래시 방지 처리 (`!kIsWeb` 가드 — 권한 요청, WiFi 스캔 호출)
+- 웹 미지원 탭(AP 목록 / 채널 현황 / 음영 추적)에 안내 UI 추가
+- `web/manifest.json` — 앱 이름/색상/설명 한국어 업데이트
+- `web/index.html` — iOS PWA 메타태그(apple-mobile-web-app) 완성
+- GitHub Pages 배포 구성 (`--base-href "/wifi_scout/"`)
 
 ### v1.1.0 (2026-03-28)
 - WiFi 표준 표시 추가: 802.11ac / WiFi 6(ax) / WiFi 7(be) 구분 (연결 정보, 주변 AP 탭)

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/signal_record.dart';
@@ -33,6 +35,7 @@ class _ShadowTabState extends State<ShadowTab> {
   }
 
   Future<int?> _getCurrentRssi() async {
+    if (kIsWeb || !Platform.isAndroid) return null;
     try {
       final results = await WiFiScan.instance.getScannedResults();
       final ssid = widget.connectedInfo?.ssid ?? '';

@@ -1,4 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/wifi_data.dart';
 
@@ -34,6 +35,24 @@ class ChannelTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb && apList.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.bar_chart, size: 56, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('채널 분석은 Android 앱에서만 지원됩니다',
+                style: TextStyle(fontSize: 15, color: Colors.grey)),
+            SizedBox(height: 8),
+            Text('브라우저(iOS/웹) 환경에서는 보안 정책상\n주변 AP 채널 정보를 읽을 수 없습니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
     final band24 = apList.where((ap) => ap.band == '2.4GHz').toList();
     final band5 = apList.where((ap) => ap.band == '5GHz').toList();
 

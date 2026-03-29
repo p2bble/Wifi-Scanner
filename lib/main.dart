@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'models/wifi_data.dart';
@@ -53,10 +54,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _requestPermissionsAndScan() async {
-    await [
-      Permission.location,
-      Permission.locationWhenInUse,
-    ].request();
+    if (!kIsWeb) {
+      await [
+        Permission.location,
+        Permission.locationWhenInUse,
+      ].request();
+    }
     await _scan();
   }
 

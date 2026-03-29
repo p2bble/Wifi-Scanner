@@ -1,11 +1,11 @@
 {
-    "name": "wifi_scout",
-    "short_name": "wifi_scout",
+    "name": "WiFi 진단기",
+    "short_name": "WiFi 진단기",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1565C0",
+    "theme_color": "#1565C0",
+    "description": "현장 WiFi 환경 분석 도구 - 신호세기, 응답속도, 네트워크 진단",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
