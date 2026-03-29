@@ -1,0 +1,9 @@
+build/
+.dart_tool/
+android/
+ios/
+lib/
+test/
+assets/icons/
+*.jks
+key.properties
