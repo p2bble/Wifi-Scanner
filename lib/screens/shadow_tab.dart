@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/signal_record.dart';
 import '../models/wifi_data.dart';
+import '../services/wifi_service.dart';
 
 class ShadowTab extends StatefulWidget {
   final ConnectedNetworkInfo? connectedInfo;
@@ -23,9 +24,11 @@ class ShadowTab extends StatefulWidget {
 
 class _ShadowTabState extends State<ShadowTab> {
   final List<SignalRecord> _records = [];
+  final _wifiService = WifiService();
   Timer? _timer;
   bool _isRecording = false;
   final _noteController = TextEditingController();
+  String _lastBssid = '';
 
   @override
   void dispose() {
@@ -51,15 +54,41 @@ class _ShadowTabState extends State<ShadowTab> {
   }
 
   void _startRecording() {
+    _lastBssid = widget.connectedInfo?.bssid ?? '';
     setState(() => _isRecording = true);
     _timer = Timer.periodic(const Duration(seconds: 2), (_) async {
       final rssi = await _getCurrentRssi();
-      if (rssi != null && mounted) {
+      if (rssi == null || !mounted) return;
+
+      final bssid = await _wifiService.getCurrentBssid();
+
+      // 로밍 감지: BSSID가 변경됨
+      bool isRoaming = false;
+      String fromBssid = '';
+      int? pingMs;
+
+      if (_lastBssid.isNotEmpty && bssid.isNotEmpty && _lastBssid != bssid) {
+        isRoaming = true;
+        fromBssid = _lastBssid;
+        // 로밍 직후 게이트웨이 ping 측정 (통신 단절 확인)
+        final gw = widget.connectedInfo?.gateway ?? '';
+        if (gw.isNotEmpty) {
+          pingMs = await _wifiService.pingGateway(gw);
+        }
+      }
+
+      if (bssid.isNotEmpty) _lastBssid = bssid;
+
+      if (mounted) {
         setState(() {
           _records.add(SignalRecord(
             timestamp: DateTime.now(),
             rssi: rssi,
             ssid: widget.connectedInfo?.ssid ?? '',
+            bssid: bssid,
+            isRoamingEvent: isRoaming,
+            roamingFromBssid: fromBssid,
+            pingMs: pingMs,
           ));
         });
         widget.onRecordsUpdated?.call(List.unmodifiable(_records));
@@ -81,7 +110,11 @@ class _ShadowTabState extends State<ShadowTab> {
         timestamp: last.timestamp,
         rssi: last.rssi,
         ssid: last.ssid,
+        bssid: last.bssid,
         note: note,
+        isRoamingEvent: last.isRoamingEvent,
+        roamingFromBssid: last.roamingFromBssid,
+        pingMs: last.pingMs,
       );
     });
     _noteController.clear();
@@ -89,7 +122,10 @@ class _ShadowTabState extends State<ShadowTab> {
 
   void _clearRecords() {
     _stopRecording();
-    setState(() => _records.clear());
+    setState(() {
+      _records.clear();
+      _lastBssid = '';
+    });
   }
 
   String get _stats {
@@ -103,6 +139,12 @@ class _ShadowTabState extends State<ShadowTab> {
 
   List<SignalRecord> get _shadowPoints =>
       _records.where((r) => r.rssi < -75).toList();
+
+  List<MapEntry<int, SignalRecord>> get _roamingEvents => _records
+      .asMap()
+      .entries
+      .where((e) => e.value.isRoamingEvent)
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +216,7 @@ class _ShadowTabState extends State<ShadowTab> {
           const Text('이동하면서 신호 변화를 기록합니다',
               style: TextStyle(color: Colors.grey, fontSize: 15)),
           const SizedBox(height: 8),
-          const Text('음영 구간(−75dBm 이하)을 자동으로 감지합니다',
+          const Text('음영 구간(−75dBm 이하) 및 AP 로밍을 자동 감지합니다',
               style: TextStyle(color: Colors.grey, fontSize: 12)),
           if (widget.connectedInfo == null) ...[
             const SizedBox(height: 16),
@@ -193,6 +235,10 @@ class _ShadowTabState extends State<ShadowTab> {
         _buildChart(),
         const SizedBox(height: 12),
         if (_shadowPoints.isNotEmpty) _buildShadowAlert(),
+        if (_roamingEvents.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildRoamingCard(),
+        ],
         const SizedBox(height: 12),
         _buildNoteInput(),
         const SizedBox(height: 12),
@@ -206,17 +252,52 @@ class _ShadowTabState extends State<ShadowTab> {
       return FlSpot(e.key.toDouble(), e.value.rssi.toDouble());
     }).toList();
 
+    final roamingLines = _roamingEvents.map((e) {
+      return VerticalLine(
+        x: e.key.toDouble(),
+        color: Colors.purple.withAlpha(180),
+        strokeWidth: 2,
+        dashArray: [4, 3],
+        label: VerticalLineLabel(
+          show: true,
+          alignment: Alignment.topRight,
+          labelResolver: (_) => '로밍',
+          style: const TextStyle(fontSize: 9, color: Colors.purple),
+        ),
+      );
+    }).toList();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 8, bottom: 8),
-              child: Text('신호 이력 (RSSI)',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 4),
+              child: Row(
+                children: [
+                  const Text('신호 이력 (RSSI)',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  if (_roamingEvents.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withAlpha(30),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.purple.withAlpha(80)),
+                      ),
+                      child: Text(
+                        '로밍 ${_roamingEvents.length}회',
+                        style: const TextStyle(fontSize: 10, color: Colors.purple),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
+            const SizedBox(height: 4),
             SizedBox(
               height: 180,
               child: LineChart(
@@ -231,13 +312,24 @@ class _ShadowTabState extends State<ShadowTab> {
                       barWidth: 2,
                       dotData: FlDotData(
                         show: true,
-                        getDotPainter: (spot, p1, p2, p3) =>
-                            FlDotCirclePainter(
-                          radius: 3,
-                          color: spot.y < -75 ? Colors.red : Colors.blue,
-                          strokeWidth: 0,
-                          strokeColor: Colors.transparent,
-                        ),
+                        getDotPainter: (spot, p1, p2, p3) {
+                          // 로밍 이벤트 포인트는 보라색 다이아몬드
+                          final idx = spot.x.toInt();
+                          if (idx < _records.length && _records[idx].isRoamingEvent) {
+                            return FlDotCirclePainter(
+                              radius: 5,
+                              color: Colors.purple,
+                              strokeWidth: 0,
+                              strokeColor: Colors.transparent,
+                            );
+                          }
+                          return FlDotCirclePainter(
+                            radius: 3,
+                            color: spot.y < -75 ? Colors.red : Colors.blue,
+                            strokeWidth: 0,
+                            strokeColor: Colors.transparent,
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -257,6 +349,7 @@ class _ShadowTabState extends State<ShadowTab> {
                         ),
                       ),
                     ],
+                    verticalLines: roamingLines,
                   ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
@@ -316,13 +409,108 @@ class _ShadowTabState extends State<ShadowTab> {
                   ),
                   Text(
                     '−75dBm 이하 구간: 로봇/장비 통신 불안정 가능',
-                    style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.red.shade700),
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRoamingCard() {
+    final events = _roamingEvents;
+    final pings = events.map((e) => e.value.pingMs).whereType<int>().toList();
+    final avgPing = pings.isEmpty
+        ? null
+        : (pings.reduce((a, b) => a + b) / pings.length).round();
+    final maxPing = pings.isEmpty ? null : pings.reduce((a, b) => a > b ? a : b);
+    final noResponse = events.where((e) => e.value.pingMs == null).length;
+
+    return Card(
+      color: Colors.purple.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.swap_horiz, color: Colors.purple.shade700, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  'AP 로밍 이벤트 ${events.length}회',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.purple.shade700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (avgPing != null)
+              _roamingStat('로밍 직후 평균 지연', '${avgPing}ms',
+                  avgPing > 100 ? Colors.red : Colors.green),
+            if (maxPing != null)
+              _roamingStat('최대 지연', '${maxPing}ms',
+                  maxPing > 200 ? Colors.red : Colors.orange),
+            if (noResponse > 0)
+              _roamingStat('응답 없음 (패킷 손실)', '$noResponse회', Colors.red),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            ...events.map((e) => _roamingEventRow(e.key, e.value)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _roamingStat(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+              width: 140,
+              child: Text(label,
+                  style:
+                      const TextStyle(fontSize: 12, color: Colors.black54))),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _roamingEventRow(int index, SignalRecord r) {
+    final time =
+        '${r.timestamp.hour.toString().padLeft(2, '0')}:${r.timestamp.minute.toString().padLeft(2, '0')}:${r.timestamp.second.toString().padLeft(2, '0')}';
+    final pingStr =
+        r.pingMs != null ? '${r.pingMs}ms' : '응답없음';
+    final pingColor =
+        r.pingMs == null ? Colors.red : (r.pingMs! > 100 ? Colors.orange : Colors.green);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          const Icon(Icons.swap_horiz, size: 14, color: Colors.purple),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              '$time  ${r.roamingFromBssid.length > 17 ? r.roamingFromBssid.substring(0, 17) : r.roamingFromBssid} → ${r.shortBssid}',
+              style: const TextStyle(fontSize: 11, color: Colors.black87),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(pingStr,
+              style: TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.bold, color: pingColor)),
+        ],
       ),
     );
   }
@@ -374,35 +562,64 @@ class _ShadowTabState extends State<ShadowTab> {
               final isShadow = r.rssi < -75;
               return ListTile(
                 dense: true,
-                leading: Text(r.signalEmoji,
-                    style: const TextStyle(fontSize: 18)),
+                leading: r.isRoamingEvent
+                    ? const Icon(Icons.swap_horiz, color: Colors.purple, size: 22)
+                    : Text(r.signalEmoji,
+                        style: const TextStyle(fontSize: 18)),
                 title: Row(
                   children: [
                     Text('${r.rssi} dBm',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: isShadow ? Colors.red : null,
+                          color: r.isRoamingEvent
+                              ? Colors.purple
+                              : (isShadow ? Colors.red : null),
                         )),
                     const SizedBox(width: 8),
-                    Text(r.signalLabel,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.grey)),
-                    if (isShadow)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 6),
-                        child: Text('음영',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold)),
-                      ),
+                    if (r.isRoamingEvent)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withAlpha(30),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          '로밍${r.pingMs != null ? "  ${r.pingMs}ms" : "  응답없음"}',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.purple,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      )
+                    else ...[
+                      Text(r.signalLabel,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey)),
+                      if (isShadow)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6),
+                          child: Text('음영',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                    ],
                   ],
                 ),
                 subtitle: r.note.isNotEmpty
                     ? Text('📍 ${r.note}',
                         style: const TextStyle(
                             color: Colors.blue, fontSize: 12))
-                    : null,
+                    : (r.isRoamingEvent
+                        ? Text(
+                            '${r.roamingFromBssid} → ${r.bssid}',
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.purple),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        : null),
                 trailing: Text(
                   '${r.timestamp.hour.toString().padLeft(2, '0')}:'
                   '${r.timestamp.minute.toString().padLeft(2, '0')}:'
@@ -418,8 +635,7 @@ class _ShadowTabState extends State<ShadowTab> {
               child: Center(
                 child: Text(
                   '최근 30개 표시 중 (전체 ${_records.length}개)',
-                  style:
-                      const TextStyle(fontSize: 11, color: Colors.grey),
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
                 ),
               ),
             ),

@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.2.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.3.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -29,10 +29,14 @@
 - 채널 3개 이상 → 빨간 막대 + ⚠️ 혼잡 표시
 - 채널별 AP 이름 목록
 
-### 탭 4 — 음영 추적
+### 탭 4 — 음영 추적 + 로밍 감지
 - 이동하면서 2초 간격 RSSI 자동 기록
 - 실시간 꺾은선 그래프 (−75dBm 기준선 점선)
 - 음영 구간(−75dBm 이하) 자동 감지 및 경고
+- **AP 로밍 이벤트 자동 감지**: BSSID 변경 순간을 자동 포착
+- **로밍 직후 ping 측정**: 로밍 전환 시 게이트웨이 지연(ms) 및 패킷 손실 기록
+- 차트에 로밍 지점 수직 마커 (보라색) 표시
+- 로밍 요약 카드: 발생 횟수 / 평균·최대 지연 / 응답없음(패킷 손실) 횟수
 - 위치 메모 첨부 기능
 - Min / Max / 평균 RSSI 통계
 
@@ -41,6 +45,15 @@
 - 환경별 신호 판정 멘트 (기준이 다름)
 - 측정 위치 텍스트 입력
 - 전체 요약 리포트 생성 + 카카오톡/슬랙 등 1탭 공유
+
+### 탭 6 — 도면 히트맵 (AMR/물류센터 특화)
+- 갤러리에서 물류센터 평면도(PNG/JPG) 불러오기
+- **핀 찍기 모드**: 도면 위를 탭하면 현재 RSSI 값이 색상 원으로 표시
+- 신호 강도별 색상 코딩: 🟢 ≥-50 / 🟡 ≥-60 / 🟠 ≥-70 / 🟠 ≥-80 / 🔴 <-80 dBm
+- `CustomPaint` 기반 반투명 후광 + dBm 수치 오버레이
+- 위치 메모 핀 첨부 기능
+- `InteractiveViewer`로 0.5x ~ 5x 자유 확대/이동
+- Undo(마지막 포인트 삭제) / 전체 초기화
 
 ---
 
@@ -88,6 +101,7 @@ SSID: CLOBOT-5G
 | HTTP | http ^1.6.0 |
 | 공유 | share_plus ^10.0.0 |
 | 날짜 포맷 | intl ^0.19.0 |
+| 이미지 선택 | image_picker ^1.1.0 |
 
 ---
 
@@ -95,18 +109,20 @@ SSID: CLOBOT-5G
 
 ```
 lib/
-├── main.dart                  # 앱 진입점, 5탭 BottomNavigationBar
+├── main.dart                  # 앱 진입점, 6탭 BottomNavigationBar
 ├── models/
 │   ├── wifi_data.dart         # ApInfo, ConnectedNetworkInfo
-│   └── signal_record.dart     # 음영 추적 데이터 모델
+│   ├── signal_record.dart     # 음영 추적 + 로밍 이벤트 데이터 모델
+│   └── heatmap_point.dart     # 도면 히트맵 포인트 모델
 ├── services/
-│   └── wifi_service.dart      # WiFi 스캔, 연결 정보, Ping
+│   └── wifi_service.dart      # WiFi 스캔, 연결 정보, Ping, BSSID 폴링
 └── screens/
     ├── connected_tab.dart     # 탭1: 현재 연결 정보
     ├── ap_list_tab.dart       # 탭2: 주변 AP 목록
     ├── channel_tab.dart       # 탭3: 채널 혼잡도
-    ├── shadow_tab.dart        # 탭4: 음영 추적
-    └── report_tab.dart        # 탭5: 리포트 생성 및 공유
+    ├── shadow_tab.dart        # 탭4: 음영 추적 + 로밍 감지
+    ├── report_tab.dart        # 탭5: 리포트 생성 및 공유
+    └── heatmap_tab.dart       # 탭6: 도면 기반 신호 히트맵
 ```
 
 ---
@@ -178,6 +194,15 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.3.0 (2026-04-19)
+- **AP 로밍 이벤트 자동 감지**: 음영 추적 중 BSSID 변경 순간을 포착, 로밍 직후 ping으로 통신 단절 시간 측정
+- 로밍 요약 카드: 발생 횟수, 평균/최대 지연, 패킷 손실(응답없음) 횟수 표시
+- 차트에 로밍 지점 수직 마커(보라색 점선) 추가
+- **도면 히트맵 탭 신규 추가**: 물류센터 평면도 위에 RSSI를 색상 원으로 시각화
+- `image_picker`로 갤러리에서 도면 이미지 불러오기 지원
+- `CustomPaint` 기반 반투명 후광 + dBm 수치 오버레이 렌더링
+- `InteractiveViewer` 0.5x~5x 핀치줌 지원, 위치 메모 핀 첨부
 
 ### v1.2.0 (2026-03-29)
 - **Web PWA 지원 추가**: iPhone / 브라우저 사용자를 위한 Progressive Web App 배포

@@ -28,6 +28,15 @@ class WifiService {
       ..sort((a, b) => b.rssi.compareTo(a.rssi));
   }
 
+  Future<String> getCurrentBssid() async {
+    if (kIsWeb || !Platform.isAndroid) return '';
+    try {
+      return await _networkInfo.getWifiBSSID() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<ConnectedNetworkInfo?> getConnectedInfo() async {
     try {
       final ssid = await _networkInfo.getWifiName() ?? '';

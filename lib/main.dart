@@ -8,6 +8,7 @@ import 'screens/ap_list_tab.dart';
 import 'screens/channel_tab.dart';
 import 'screens/report_tab.dart';
 import 'screens/shadow_tab.dart';
+import 'screens/heatmap_tab.dart';
 import 'models/signal_record.dart';
 
 void main() {
@@ -93,6 +94,7 @@ class _HomePageState extends State<HomePage> {
         apList: _apList,
         shadowRecords: _shadowRecords,
       ),
+      HeatmapTab(connectedInfo: _connectedInfo),
     ];
 
     return Scaffold(
@@ -153,6 +155,10 @@ class _HomePageState extends State<HomePage> {
           const NavigationDestination(
             icon: Icon(Icons.summarize),
             label: '리포트',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.map),
+            label: '히트맵',
           ),
         ],
       ),
