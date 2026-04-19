@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/wifi_data.dart';
+import '../models/network_quality.dart';
 
 class WifiService {
   final _networkInfo = NetworkInfo();
@@ -93,6 +94,87 @@ class WifiService {
       }
     } catch (_) {}
     return null;
+  }
+
+  // 단일 TCP 연결 측정 — 폴백 없음 (패킷 손실 판별 목적)
+  Future<int?> _pingTcp(String host,
+      {Duration timeout = const Duration(milliseconds: 300)}) async {
+    if (host.isEmpty) return null;
+    try {
+      final sw = Stopwatch()..start();
+      final socket = await Socket.connect(host, 80, timeout: timeout);
+      sw.stop();
+      socket.destroy();
+      return sw.elapsedMilliseconds;
+    } catch (_) {
+      return null; // timeout or refused = 손실로 처리
+    }
+  }
+
+  /// 정밀 품질 측정: [count]회 연속 TCP ping → 평균/지터/손실률 계산
+  /// [onProgress]: (완료 횟수, 전체 횟수) 진행 상황 콜백
+  Future<NetworkQuality> measureQuality(
+    String host, {
+    int count = 30,
+    Duration interval = const Duration(milliseconds: 100),
+    void Function(int done, int total)? onProgress,
+  }) async {
+    if (kIsWeb || !Platform.isAndroid) {
+      return NetworkQuality(
+        host: host,
+        total: 0,
+        received: 0,
+        lossRate: 100,
+        measuredAt: DateTime.now(),
+      );
+    }
+
+    final results = <int?>[];
+    for (int i = 0; i < count; i++) {
+      results.add(await _pingTcp(host));
+      onProgress?.call(i + 1, count);
+      if (i < count - 1) await Future.delayed(interval);
+    }
+
+    final responded = results.whereType<int>().toList();
+    final lossRate =
+        (results.where((r) => r == null).length / count) * 100.0;
+
+    if (responded.isEmpty) {
+      return NetworkQuality(
+        host: host,
+        total: count,
+        received: 0,
+        lossRate: lossRate,
+        measuredAt: DateTime.now(),
+      );
+    }
+
+    final avg = responded.reduce((a, b) => a + b) / responded.length;
+    final minMs = responded.reduce((a, b) => a < b ? a : b);
+    final maxMs = responded.reduce((a, b) => a > b ? a : b);
+
+    // Jitter: 연속 편차 평균 (RFC 3550 — VoIP/실시간 제어 표준)
+    double jitter = 0;
+    if (responded.length > 1) {
+      final diffs = <int>[
+        for (int i = 1; i < responded.length; i++)
+          (responded[i] - responded[i - 1]).abs()
+      ];
+      jitter = diffs.reduce((a, b) => a + b) / diffs.length;
+    }
+
+    return NetworkQuality(
+      host: host,
+      total: count,
+      received: responded.length,
+      lossRate: lossRate,
+      avgMs: avg.round(),
+      jitterMs: jitter.round(),
+      minMs: minMs,
+      maxMs: maxMs,
+      measuredAt: DateTime.now(),
+    );
   }
 
   Map<int, List<ApInfo>> groupByChannel(List<ApInfo> aps) {

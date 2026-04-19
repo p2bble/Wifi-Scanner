@@ -10,6 +10,7 @@ import 'screens/report_tab.dart';
 import 'screens/shadow_tab.dart';
 import 'screens/heatmap_tab.dart';
 import 'models/signal_record.dart';
+import 'models/network_quality.dart';
 
 void main() {
   runApp(const WifiScoutApp());
@@ -45,6 +46,7 @@ class _HomePageState extends State<HomePage> {
   List<ApInfo> _apList = [];
   ConnectedNetworkInfo? _connectedInfo;
   List<SignalRecord> _shadowRecords = [];
+  NetworkQuality? _lastQuality;
   bool _isScanning = false;
   int _selectedIndex = 0;
 
@@ -81,7 +83,11 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      ConnectedTab(connectedInfo: _connectedInfo, apList: _apList),
+      ConnectedTab(
+        connectedInfo: _connectedInfo,
+        apList: _apList,
+        onQualityMeasured: (q) => setState(() => _lastQuality = q),
+      ),
       ApListTab(apList: _apList, connectedSsid: _connectedInfo?.ssid),
       ChannelTab(apList: _apList),
       ShadowTab(
@@ -93,6 +99,7 @@ class _HomePageState extends State<HomePage> {
         connectedInfo: _connectedInfo,
         apList: _apList,
         shadowRecords: _shadowRecords,
+        quality: _lastQuality,
       ),
       HeatmapTab(connectedInfo: _connectedInfo),
     ];

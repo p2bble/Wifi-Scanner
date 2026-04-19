@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import '../models/network_quality.dart';
 import '../models/wifi_data.dart';
 import '../services/wifi_service.dart';
 
 class ConnectedTab extends StatefulWidget {
   final ConnectedNetworkInfo? connectedInfo;
   final List<ApInfo> apList;
+  final void Function(NetworkQuality)? onQualityMeasured;
 
   const ConnectedTab({
     super.key,
     required this.connectedInfo,
     required this.apList,
+    this.onQualityMeasured,
   });
 
   @override
@@ -18,9 +21,17 @@ class ConnectedTab extends StatefulWidget {
 
 class _ConnectedTabState extends State<ConnectedTab> {
   final _wifiService = WifiService();
+
+  // 빠른 ping (연결 정보 탭 진입 시 1회 측정)
   int? _gatewayPing;
   int? _internetPing;
   bool _pinging = false;
+
+  // 정밀 품질 측정
+  NetworkQuality? _quality;
+  bool _measuring = false;
+  int _measureProgress = 0;
+  static const _measureCount = 30;
 
   @override
   void initState() {
@@ -36,19 +47,48 @@ class _ConnectedTabState extends State<ConnectedTab> {
       _wifiService.pingGateway(gw),
       _wifiService.pingInternet(),
     ]);
+    if (mounted) {
+      setState(() {
+        _gatewayPing = results[0];
+        _internetPing = results[1];
+        _pinging = false;
+      });
+    }
+  }
+
+  Future<void> _startQualityMeasure() async {
+    final gw = widget.connectedInfo?.gateway ?? '';
+    if (gw.isEmpty) return;
+
     setState(() {
-      _gatewayPing = results[0];
-      _internetPing = results[1];
-      _pinging = false;
+      _measuring = true;
+      _measureProgress = 0;
+      _quality = null;
     });
+
+    final result = await _wifiService.measureQuality(
+      gw,
+      count: _measureCount,
+      interval: const Duration(milliseconds: 100),
+      onProgress: (done, total) {
+        if (mounted) setState(() => _measureProgress = done);
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _quality = result;
+        _measuring = false;
+      });
+      widget.onQualityMeasured?.call(result);
+    }
   }
 
   ApInfo? get _connectedAp {
     if (widget.connectedInfo == null) return null;
     try {
-      return widget.apList.firstWhere(
-        (ap) => ap.ssid == widget.connectedInfo!.ssid,
-      );
+      return widget.apList
+          .firstWhere((ap) => ap.ssid == widget.connectedInfo!.ssid);
     } catch (_) {
       return null;
     }
@@ -66,7 +106,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
           children: [
             Icon(Icons.wifi_off, size: 64, color: Colors.grey),
             SizedBox(height: 16),
-            Text('WiFi에 연결되지 않았습니다', style: TextStyle(fontSize: 16, color: Colors.grey)),
+            Text('WiFi에 연결되지 않았습니다',
+                style: TextStyle(fontSize: 16, color: Colors.grey)),
           ],
         ),
       );
@@ -82,6 +123,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
           _buildNetworkCard(info),
           const SizedBox(height: 12),
           _buildPingCard(),
+          const SizedBox(height: 12),
+          _buildQualityCard(),
         ],
       ),
     );
@@ -101,7 +144,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
                 Expanded(
                   child: Text(
                     info.ssid.isEmpty ? '(알 수 없음)' : info.ssid,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -109,7 +153,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
             ),
             const Divider(height: 24),
             if (ap != null) ...[
-              _infoRow('신호 세기', '${ap.rssi} dBm  ${ap.signalEmoji} ${ap.signalLabel}'),
+              _infoRow('신호 세기',
+                  '${ap.rssi} dBm  ${ap.signalEmoji} ${ap.signalLabel}'),
               _infoRow('WiFi 표준', ap.wifiStandard),
               _infoRow('주파수 대역', '${ap.band} (${ap.frequency} MHz)'),
               _infoRow('채널', '${ap.channel}번'),
@@ -129,10 +174,14 @@ class _ConnectedTabState extends State<ConnectedTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('네트워크 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('네트워크 정보',
+                style:
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const Divider(height: 20),
-            _infoRow('IP 주소', info.ipAddress.isEmpty ? '-' : info.ipAddress),
-            _infoRow('게이트웨이', info.gateway.isEmpty ? '-' : info.gateway),
+            _infoRow('IP 주소',
+                info.ipAddress.isEmpty ? '-' : info.ipAddress),
+            _infoRow(
+                '게이트웨이', info.gateway.isEmpty ? '-' : info.gateway),
           ],
         ),
       ),
@@ -149,9 +198,15 @@ class _ConnectedTabState extends State<ConnectedTab> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('응답 속도 (Ping)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Text('응답 속도 (빠른 Ping)',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
                 if (_pinging)
-                  const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child:
+                          CircularProgressIndicator(strokeWidth: 2))
                 else
                   IconButton(
                     icon: const Icon(Icons.refresh, size: 20),
@@ -170,6 +225,224 @@ class _ConnectedTabState extends State<ConnectedTab> {
     );
   }
 
+  Widget _buildQualityCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('통신 품질 정밀 측정',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                Tooltip(
+                  message:
+                      'TCP Ping $_measureCount회 연속 측정\n평균 지연 · 지터(편차) · 패킷 손실률 계산\n소요 시간: 약 3~4초',
+                  child: Icon(Icons.info_outline,
+                      size: 16, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '게이트웨이 TCP Ping $_measureCount회 · Jitter(RFC 3550) · 패킷 손실률',
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+            const Divider(height: 20),
+
+            if (_measuring) ...[
+              _buildMeasuringState(),
+            ] else if (_quality != null) ...[
+              _buildQualityResult(_quality!),
+              const SizedBox(height: 14),
+              _buildMeasureButton(rerun: true),
+            ] else ...[
+              _buildQualityIdle(),
+              const SizedBox(height: 14),
+              _buildMeasureButton(rerun: false),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeasuringState() {
+    final progress = _measureProgress / _measureCount;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 10),
+            Text(
+              '측정 중... $_measureProgress / $_measureCount',
+              style: const TextStyle(fontSize: 13, color: Colors.blue),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 6,
+            backgroundColor: Colors.grey.shade200,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '잠시만 기다려주세요 — 약 ${(_measureCount * 0.1).toStringAsFixed(0)}초 소요',
+          style:
+              TextStyle(fontSize: 11, color: Colors.grey.shade500),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQualityIdle() {
+    return Text(
+      '로봇 실시간 제어에 중요한 지터(Jitter)와\n패킷 손실률(Packet Loss)을 정밀 측정합니다.',
+      style: TextStyle(fontSize: 13, color: Colors.grey.shade600, height: 1.5),
+    );
+  }
+
+  Widget _buildQualityResult(NetworkQuality q) {
+    return Column(
+      children: [
+        _qualityRow(
+          '평균 지연',
+          q.avgMs != null ? '${q.avgMs} ms' : '-',
+          _pingColor(q.avgMs),
+          sub: q.minMs != null && q.maxMs != null
+              ? 'min ${q.minMs}ms / max ${q.maxMs}ms'
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _qualityRow(
+          '지터 (편차)',
+          q.jitterMs != null ? '${q.jitterMs} ms' : '-',
+          _jitterColor(q.jitterMs),
+          sub: q.jitterMs != null
+              ? (q.jitterMs! < 5
+                  ? '실시간 제어 적합'
+                  : q.jitterMs! < 15
+                      ? '경미한 편차'
+                      : '제어 불안정 위험')
+              : null,
+        ),
+        const SizedBox(height: 8),
+        _qualityRow(
+          '패킷 손실',
+          q.lossLabel,
+          q.lossColor,
+          sub: '${q.received}/${q.total}회 응답',
+        ),
+        const Divider(height: 20),
+        Container(
+          width: double.infinity,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: q.gradeColor.withAlpha(25),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: q.gradeColor.withAlpha(80)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '${q.gradeEmoji} 종합 등급: ${q.grade}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: q.gradeColor,
+                        fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 3),
+              Text(
+                q.gradeDesc,
+                style: TextStyle(
+                    fontSize: 12, color: q.gradeColor.withAlpha(200)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMeasureButton({required bool rerun}) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: widget.connectedInfo?.gateway.isEmpty ?? true
+            ? null
+            : _startQualityMeasure,
+        icon: Icon(rerun ? Icons.refresh : Icons.speed, size: 18),
+        label: Text(rerun ? '다시 측정' : '정밀 측정 시작 ($_measureCount회)'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _qualityRow(String label, String value, Color color,
+      {String? sub}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(label,
+              style:
+                  const TextStyle(color: Colors.grey, fontSize: 13)),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: color)),
+              if (sub != null)
+                Text(sub,
+                    style: TextStyle(
+                        fontSize: 11, color: Colors.grey.shade500)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _pingColor(int? ms) {
+    if (ms == null) return Colors.grey;
+    if (ms < 10) return Colors.green;
+    if (ms < 30) return Colors.orange;
+    return Colors.red;
+  }
+
+  Color _jitterColor(int? ms) {
+    if (ms == null) return Colors.grey;
+    if (ms < 5) return Colors.green;
+    if (ms < 15) return Colors.orange;
+    return Colors.red;
+  }
+
   Widget _infoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -178,9 +451,13 @@ class _ConnectedTabState extends State<ConnectedTab> {
         children: [
           SizedBox(
             width: 110,
-            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            child: Text(label,
+                style: const TextStyle(
+                    color: Colors.grey, fontSize: 13)),
           ),
-          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+          Expanded(
+              child: Text(value,
+                  style: const TextStyle(fontSize: 13))),
         ],
       ),
     );
@@ -212,9 +489,12 @@ class _ConnectedTabState extends State<ConnectedTab> {
         children: [
           SizedBox(
             width: 140,
-            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+            child: Text(label,
+                style: const TextStyle(
+                    color: Colors.grey, fontSize: 13)),
           ),
-          Text(value, style: TextStyle(fontSize: 13, color: color)),
+          Text(value,
+              style: TextStyle(fontSize: 13, color: color)),
         ],
       ),
     );

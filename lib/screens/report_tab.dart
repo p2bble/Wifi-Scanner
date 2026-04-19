@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import '../models/wifi_data.dart';
 import '../models/signal_record.dart';
+import '../models/network_quality.dart';
 
 enum EnvType { home, office, factory }
 
@@ -47,6 +48,24 @@ extension EnvTypeExt on EnvType {
     };
   }
 
+  // 환경별 통신 품질 해석
+  String qualityJudge(NetworkQuality q) {
+    if (q.received == 0) return '❓ 측정 실패 — 게이트웨이 응답 없음';
+    final grade = q.grade;
+    if (this == EnvType.factory) {
+      return switch (grade) {
+        '양호' => '✅ ${q.gradeEmoji} 양호 — AMR 실시간 제어 적합 (지터 ${q.jitterMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+        '주의' => '🟡 주의 — 간헐적 제어 지연 가능 (지터 ${q.jitterMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+        _ => '❌ 위험 — 로봇 통신 장애 위험, 즉시 조치 필요 (지터 ${q.jitterMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+      };
+    }
+    return switch (grade) {
+      '양호' => '✅ 양호 — 정상 통신 가능 (평균 ${q.avgMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+      '주의' => '🟡 주의 — 일부 서비스 영향 가능 (지터 ${q.jitterMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+      _ => '❌ 불량 — 통신 품질 저하 (지터 ${q.jitterMs ?? "-"}ms / 손실 ${q.lossRate.toStringAsFixed(1)}%)',
+    };
+  }
+
   // 환경별 음영 해석
   String shadowJudge(int shadowCount) {
     if (shadowCount == 0) return '✅ 음영 구간 없음';
@@ -65,12 +84,14 @@ class ReportTab extends StatefulWidget {
   final ConnectedNetworkInfo? connectedInfo;
   final List<ApInfo> apList;
   final List<SignalRecord> shadowRecords;
+  final NetworkQuality? quality;
 
   const ReportTab({
     super.key,
     required this.connectedInfo,
     required this.apList,
     this.shadowRecords = const [],
+    this.quality,
   });
 
   @override
@@ -196,11 +217,26 @@ class _ReportTabState extends State<ReportTab> {
       }
     }
 
+    if (widget.quality != null) {
+      final q = widget.quality!;
+      buf.writeln();
+      buf.writeln('[통신 품질 정밀 측정]');
+      buf.writeln('  대상: ${q.host}  (TCP Ping ${q.total}회)');
+      buf.writeln('  평균 지연: ${q.avgMs != null ? "${q.avgMs}ms" : "-"}');
+      buf.writeln('  지터 (편차): ${q.jitterMs != null ? "${q.jitterMs}ms" : "-"}');
+      buf.writeln('  패킷 손실: ${q.lossLabel}  (${q.received}/${q.total}회 응답)');
+      buf.writeln('  범위: min ${q.minMs ?? "-"}ms / max ${q.maxMs ?? "-"}ms');
+      buf.writeln('  판정: ${env.qualityJudge(q)}');
+    }
+
     buf.writeln();
     buf.writeln('[종합 판정]');
     buf.writeln('  ${env.channelJudge(congested24, congested5)}');
     if (records.isNotEmpty) {
       buf.writeln('  ${env.shadowJudge(shadowCount)}');
+    }
+    if (widget.quality != null) {
+      buf.writeln('  ${env.qualityJudge(widget.quality!)}');
     }
 
     buf.writeln();

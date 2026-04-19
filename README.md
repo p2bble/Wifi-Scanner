@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.3.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.4.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -15,7 +15,11 @@
 ### 탭 1 — 연결 정보
 - 현재 연결된 SSID, BSSID, 신호 세기(dBm), 주파수 대역, 채널 번호
 - IP 주소 / 게이트웨이
-- 게이트웨이 Ping, 인터넷 Ping (Google generate_204 기반)
+- 빠른 Ping: 게이트웨이 TCP, 인터넷 HTTP(Google generate_204)
+- **통신 품질 정밀 측정**: 버튼 한 번으로 TCP Ping 30회 연속 측정
+  - **평균 지연** (avg ms) / **지터**(Jitter, RFC 3550 연속 편차 평균) / **패킷 손실률** (%)
+  - 측정 중 실시간 프로그레스바 표시 (약 3초 소요)
+  - AMR 관점 3단계 등급 자동 판정: ✅ 양호 / 🟡 주의 / ❌ 위험
 - 신호 등급 라벨: 매우 좋음 / 좋음 / 보통 / 나쁨 / 매우 나쁨
 
 ### 탭 2 — 주변 AP
@@ -102,6 +106,7 @@ SSID: CLOBOT-5G
 | 공유 | share_plus ^10.0.0 |
 | 날짜 포맷 | intl ^0.19.0 |
 | 이미지 선택 | image_picker ^1.1.0 |
+| 파일 저장 | path_provider ^2.1.5 |
 
 ---
 
@@ -113,15 +118,16 @@ lib/
 ├── models/
 │   ├── wifi_data.dart         # ApInfo, ConnectedNetworkInfo
 │   ├── signal_record.dart     # 음영 추적 + 로밍 이벤트 데이터 모델
-│   └── heatmap_point.dart     # 도면 히트맵 포인트 모델
+│   ├── heatmap_point.dart     # 도면 히트맵 포인트 모델
+│   └── network_quality.dart   # Jitter/PacketLoss 통신 품질 결과 모델
 ├── services/
-│   └── wifi_service.dart      # WiFi 스캔, 연결 정보, Ping, BSSID 폴링
+│   └── wifi_service.dart      # WiFi 스캔, 연결 정보, Ping, BSSID 폴링, 품질 측정
 └── screens/
-    ├── connected_tab.dart     # 탭1: 현재 연결 정보
+    ├── connected_tab.dart     # 탭1: 연결 정보 + 통신 품질 정밀 측정
     ├── ap_list_tab.dart       # 탭2: 주변 AP 목록
     ├── channel_tab.dart       # 탭3: 채널 혼잡도
     ├── shadow_tab.dart        # 탭4: 음영 추적 + 로밍 감지
-    ├── report_tab.dart        # 탭5: 리포트 생성 및 공유
+    ├── report_tab.dart        # 탭5: 리포트 생성 및 공유 (품질 섹션 포함)
     └── heatmap_tab.dart       # 탭6: 도면 기반 신호 히트맵
 ```
 
@@ -194,6 +200,15 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.4.0 (2026-04-19)
+- **통신 품질 정밀 측정 추가**: 연결 정보 탭에 "정밀 측정 시작" 버튼
+- TCP Ping 30회 연속 측정 (100ms 간격) → 평균 지연 / Jitter / 패킷 손실률 계산
+- Jitter: RFC 3550 연속 편차 평균 방식 — VoIP/로봇 실시간 제어 표준 방식
+- AMR 관점 3단계 등급 자동 판정 (양호/주의/위험) + 판정 근거 문구
+- 측정 중 실시간 LinearProgressIndicator + 완료 횟수 표시 (15/30)
+- 리포트에 `[통신 품질 정밀 측정]` 섹션 자동 포함 (측정한 경우에만)
+- `network_quality.dart` 모델 신규 추가
 
 ### v1.3.0 (2026-04-19)
 - **AP 로밍 이벤트 자동 감지**: 음영 추적 중 BSSID 변경 순간을 포착, 로밍 직후 ping으로 통신 단절 시간 측정
