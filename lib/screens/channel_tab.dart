@@ -55,25 +55,38 @@ class ChannelTab extends StatelessWidget {
 
     final band24 = apList.where((ap) => ap.band == '2.4GHz').toList();
     final band5 = apList.where((ap) => ap.band == '5GHz').toList();
+    final band6 = apList.where((ap) => ap.band == '6GHz').toList();
 
     // 2.4GHz 비겹침 채널: 1, 6, 11
     final rec24 = _recommendChannel(band24, [1, 6, 11]);
     // 5GHz 주요 채널
     final rec5 = _recommendChannel(band5, [36, 40, 44, 48, 149, 153, 157, 161]);
+    // 6GHz PSC(Preferred Scanning Channel) — 16채널 간격
+    final rec6 = band6.isNotEmpty
+        ? _recommendChannel(band6, [5, 21, 37, 53, 69, 85, 101, 117, 133, 149, 165, 181, 197, 213, 229])
+        : null;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        _buildRecommendCard(rec24, rec5),
+        _buildRecommendCard(rec24, rec5, rec6),
         const SizedBox(height: 16),
         _buildBandSection('2.4GHz 채널 현황', band24, Colors.orange),
         const SizedBox(height: 16),
         _buildBandSection('5GHz 채널 현황', band5, Colors.blue),
+        if (band6.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          _buildBandSection('6GHz 채널 현황 (Wi-Fi 6E/7)', band6, Colors.teal),
+        ],
       ],
     );
   }
 
-  Widget _buildRecommendCard(Map<String, dynamic> rec24, Map<String, dynamic> rec5) {
+  Widget _buildRecommendCard(
+    Map<String, dynamic> rec24,
+    Map<String, dynamic> rec5,
+    Map<String, dynamic>? rec6,
+  ) {
     return Card(
       color: Colors.green.shade50,
       child: Padding(
@@ -93,11 +106,20 @@ class ChannelTab extends StatelessWidget {
             _recommendRow('2.4GHz', rec24['channel'], rec24['reason'], Colors.orange),
             const SizedBox(height: 8),
             _recommendRow('5GHz', rec5['channel'], rec5['reason'], Colors.blue),
+            if (rec6 != null) ...[
+              const SizedBox(height: 8),
+              _recommendRow('6GHz', rec6['channel'], rec6['reason'], Colors.teal),
+            ],
             const SizedBox(height: 8),
             const Text(
               '* AP 공유기의 채널 설정에서 변경하세요',
               style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
+            if (rec6 != null)
+              const Text(
+                '* 6GHz는 PSC(Preferred Scanning Channel) 기준 추천',
+                style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
           ],
         ),
       ),

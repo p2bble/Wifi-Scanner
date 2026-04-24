@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.4.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.4.1-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -27,11 +27,13 @@
 - SSID / 신호 세기 / 주파수 대역 / 채널 / 보안 여부
 - 현재 연결된 AP 배지 표시
 - 숨겨진 네트워크 표시
+- **Wi-Fi 7** (금색) / **6GHz** (청록) 뱃지 자동 표시
 
 ### 탭 3 — 채널 현황
-- 2.4GHz / 5GHz 채널별 AP 수 Bar Chart
+- **2.4GHz / 5GHz / 6GHz** 채널별 AP 수 Bar Chart
 - 채널 3개 이상 → 빨간 막대 + ⚠️ 혼잡 표시
 - 채널별 AP 이름 목록
+- 6GHz PSC(Preferred Scanning Channel) 기준 최적 채널 추천
 
 ### 탭 4 — 음영 추적 + 로밍 감지
 - 이동하면서 2초 간격 RSSI 자동 기록
@@ -200,6 +202,13 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.4.1 (2026-04-24)
+- **버그 수정: 6GHz 채널 계산 오류** — WiFi 6E/7 AP(5925–7125 MHz)가 5GHz 채널 공식으로 오계산되던 문제 수정
+- **버그 수정: band 판별 순서** — 5925 MHz 이상을 6GHz로 우선 처리 (기존: 5000 이상을 모두 5GHz로 오판정)
+- **WiFi 표준 추정 개선** — 6GHz 대역 AP는 capabilities 무관하게 Wi-Fi 6E로 표시, Wi-Fi 7 표기 통일 (Wi-Fi 7 / Wi-Fi 6E / Wi-Fi 6)
+- **주변 AP 탭: Wi-Fi 7 / 6GHz 뱃지 추가** — Wi-Fi 7 AP에 금색, 6GHz AP에 청록 뱃지 표시
+- **채널 탭: 6GHz 섹션 추가** — 6GHz AP 탐지 시 별도 Bar Chart + PSC 채널 기준 최적 채널 추천
 
 ### v1.4.0 (2026-04-19)
 - **통신 품질 정밀 측정 추가**: 연결 정보 탭에 "정밀 측정 시작" 버튼

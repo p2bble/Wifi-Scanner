@@ -58,6 +58,17 @@ class _ApTile extends StatelessWidget {
 
   const _ApTile({required this.ap, required this.isConnected});
 
+  Widget _badge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+    );
+  }
+
   Color _signalColor() {
     if (ap.rssi >= -60) return Colors.green;
     if (ap.rssi >= -70) return Colors.orange;
@@ -86,15 +97,16 @@ class _ApTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (isConnected)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text('연결됨', style: TextStyle(color: Colors.white, fontSize: 11)),
-              ),
+            if (ap.wifiStandard.startsWith('Wi-Fi 7'))
+              _badge('Wi-Fi 7', const Color(0xFFB8860B)),
+            if (ap.band == '6GHz') ...[
+              const SizedBox(width: 4),
+              _badge('6GHz', Colors.teal),
+            ],
+            if (isConnected) ...[
+              const SizedBox(width: 4),
+              _badge('연결됨', Colors.blue),
+            ],
           ],
         ),
         subtitle: Text(
