@@ -177,6 +177,28 @@ class WifiService {
     );
   }
 
+  /// HTTP 다운로드 기반 속도 측정 — Cloudflare __down 엔드포인트 2MB 사용
+  /// 반환값: Mbps (null = 측정 실패)
+  Future<double?> measureSpeed() async {
+    if (kIsWeb || !Platform.isAndroid) return null;
+    const testUrl = 'https://speed.cloudflare.com/__down?bytes=2000000';
+    try {
+      final sw = Stopwatch()..start();
+      final response = await http
+          .get(Uri.parse(testUrl))
+          .timeout(const Duration(seconds: 20));
+      sw.stop();
+      if (response.statusCode != 200) return null;
+      final bytes = response.bodyBytes.length;
+      if (bytes == 0) return null;
+      final seconds = sw.elapsedMilliseconds / 1000.0;
+      // bits / seconds / 1,000,000 = Mbps
+      return (bytes * 8) / (seconds * 1000000);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Map<int, List<ApInfo>> groupByChannel(List<ApInfo> aps) {
     final Map<int, List<ApInfo>> map = {};
     for (final ap in aps) {

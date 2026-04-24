@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/network_quality.dart';
+import '../models/scan_history.dart';
 import '../models/wifi_data.dart';
+import '../services/database_service.dart';
 import '../services/wifi_service.dart';
 
 class ConnectedTab extends StatefulWidget {
@@ -21,6 +23,7 @@ class ConnectedTab extends StatefulWidget {
 
 class _ConnectedTabState extends State<ConnectedTab> {
   final _wifiService = WifiService();
+  final _db = DatabaseService();
 
   // 빠른 ping (연결 정보 탭 진입 시 1회 측정)
   int? _gatewayPing;
@@ -32,6 +35,11 @@ class _ConnectedTabState extends State<ConnectedTab> {
   bool _measuring = false;
   int _measureProgress = 0;
   static const _measureCount = 30;
+
+  // 속도 측정
+  double? _speedMbps;
+  bool _speedTesting = false;
+  bool _speedSaved = false;
 
   @override
   void initState() {
@@ -81,7 +89,46 @@ class _ConnectedTabState extends State<ConnectedTab> {
         _measuring = false;
       });
       widget.onQualityMeasured?.call(result);
+      _saveHistory(quality: result);
     }
+  }
+
+  Future<void> _startSpeedTest() async {
+    setState(() {
+      _speedTesting = true;
+      _speedMbps = null;
+      _speedSaved = false;
+    });
+    final mbps = await _wifiService.measureSpeed();
+    if (mounted) {
+      setState(() {
+        _speedMbps = mbps;
+        _speedTesting = false;
+      });
+      if (mbps != null) _saveHistory(speedMbps: mbps);
+    }
+  }
+
+  Future<void> _saveHistory({NetworkQuality? quality, double? speedMbps}) async {
+    final info = widget.connectedInfo;
+    final ap = _connectedAp;
+    if (info == null) return;
+
+    await _db.insert(ScanHistory(
+      measuredAt: DateTime.now(),
+      ssid: info.ssid,
+      bssid: info.bssid,
+      rssi: ap?.rssi ?? 0,
+      band: ap?.band ?? '-',
+      channel: ap?.channel ?? 0,
+      wifiStandard: ap?.wifiStandard ?? '-',
+      grade: quality?.grade,
+      avgMs: quality?.avgMs,
+      jitterMs: quality?.jitterMs,
+      lossRate: quality?.lossRate,
+      speedMbps: speedMbps ?? _speedMbps,
+    ));
+    if (speedMbps != null && mounted) setState(() => _speedSaved = true);
   }
 
   ApInfo? get _connectedAp {
@@ -125,6 +172,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
           _buildPingCard(),
           const SizedBox(height: 12),
           _buildQualityCard(),
+          const SizedBox(height: 12),
+          _buildSpeedCard(),
         ],
       ),
     );
@@ -459,6 +508,108 @@ class _ConnectedTabState extends State<ConnectedTab> {
               child: Text(value,
                   style: const TextStyle(fontSize: 13))),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSpeedCard() {
+    String speedText;
+    Color speedColor;
+    String? speedSub;
+
+    if (_speedTesting) {
+      speedText = '측정 중...';
+      speedColor = Colors.grey;
+      speedSub = 'Cloudflare 2MB 다운로드 중 (최대 20초)';
+    } else if (_speedMbps != null) {
+      final mbps = _speedMbps!;
+      speedText = '${mbps.toStringAsFixed(1)} Mbps';
+      if (mbps >= 50) {
+        speedColor = Colors.green;
+        speedSub = '우수 — 고화질 스트리밍 / AMR 원격제어 적합';
+      } else if (mbps >= 10) {
+        speedColor = Colors.orange;
+        speedSub = '양호 — 일반 업무 적합';
+      } else if (mbps >= 1) {
+        speedColor = Colors.deepOrange;
+        speedSub = '느림 — 대용량 전송 지연 가능';
+      } else {
+        speedColor = Colors.red;
+        speedSub = '매우 느림 — AP 재배치 또는 채널 변경 권장';
+      }
+      if (_speedSaved) speedSub = '$speedSub  ✅ 히스토리 저장됨';
+    } else {
+      speedText = '-';
+      speedColor = Colors.grey;
+      speedSub = 'Cloudflare 서버 기준 실제 다운로드 속도 측정';
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('다운로드 속도 측정',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: 'Cloudflare 서버에서 2MB 파일 다운로드\n실제 WiFi 처리량(Throughput)을 Mbps로 표시',
+                  child:
+                      Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const Divider(height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (_speedTesting)
+                  const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  Icon(Icons.speed,
+                      size: 28,
+                      color: _speedMbps != null ? speedColor : Colors.grey),
+                const SizedBox(width: 12),
+                Text(
+                  speedText,
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: speedColor),
+                ),
+              ],
+            ),
+            if (speedSub != null) ...[
+              const SizedBox(height: 4),
+              Text(speedSub,
+                  style:
+                      TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            ],
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: (_speedTesting || widget.connectedInfo == null)
+                    ? null
+                    : _startSpeedTest,
+                icon: Icon(
+                    _speedMbps != null ? Icons.refresh : Icons.network_check,
+                    size: 18),
+                label: Text(_speedMbps != null ? '다시 측정' : '속도 측정 시작'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,16 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'models/wifi_data.dart';
 import 'services/wifi_service.dart';
+import 'services/notification_service.dart';
 import 'screens/connected_tab.dart';
 import 'screens/ap_list_tab.dart';
 import 'screens/channel_tab.dart';
 import 'screens/report_tab.dart';
 import 'screens/shadow_tab.dart';
 import 'screens/heatmap_tab.dart';
+import 'screens/history_screen.dart';
 import 'models/signal_record.dart';
 import 'models/network_quality.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   runApp(const WifiScoutApp());
 }
 
@@ -114,6 +118,14 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: '측정 히스토리',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HistoryScreen()),
+            ),
+          ),
           if (_isScanning)
             const Padding(
               padding: EdgeInsets.all(16),

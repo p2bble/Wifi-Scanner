@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/signal_record.dart';
 import '../models/wifi_data.dart';
+import '../services/notification_service.dart';
 import '../services/wifi_service.dart';
 
 class ShadowTab extends StatefulWidget {
@@ -78,6 +79,11 @@ class _ShadowTabState extends State<ShadowTab> {
       }
 
       if (bssid.isNotEmpty) _lastBssid = bssid;
+
+      // 음영 감지 시 로컬 알림 발송 (30초 쿨다운)
+      if (rssi < -75) {
+        NotificationService.showShadowAlert(rssi);
+      }
 
       if (mounted) {
         setState(() {

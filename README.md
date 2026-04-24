@@ -6,11 +6,17 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.4.1-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.5.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
 ## 주요 기능
+
+### AppBar 버튼
+- **히스토리 (🕐)**: 품질 측정 및 속도 측정 결과를 시간 순으로 조회
+  - RSSI 트렌드 LineChart (최근 50회)
+  - 등급별 통계 (양호/주의/위험 횟수, 평균 RSSI/속도)
+  - 스와이프로 개별 삭제, 전체 삭제 지원
 
 ### 탭 1 — 연결 정보
 - 현재 연결된 SSID, BSSID, 신호 세기(dBm), 주파수 대역, 채널 번호
@@ -20,6 +26,10 @@
   - **평균 지연** (avg ms) / **지터**(Jitter, RFC 3550 연속 편차 평균) / **패킷 손실률** (%)
   - 측정 중 실시간 프로그레스바 표시 (약 3초 소요)
   - AMR 관점 3단계 등급 자동 판정: ✅ 양호 / 🟡 주의 / ❌ 위험
+  - 측정 완료 시 히스토리 DB 자동 저장
+- **다운로드 속도 측정**: Cloudflare 2MB 파일 기반 실제 처리량(Throughput) Mbps 측정
+  - 4단계 판정: 우수(≥50Mbps) / 양호(≥10Mbps) / 느림(≥1Mbps) / 매우 느림
+  - 측정 결과 히스토리 DB 자동 저장
 - 신호 등급 라벨: 매우 좋음 / 좋음 / 보통 / 나쁨 / 매우 나쁨
 
 ### 탭 2 — 주변 AP
@@ -39,6 +49,7 @@
 - 이동하면서 2초 간격 RSSI 자동 기록
 - 실시간 꺾은선 그래프 (−75dBm 기준선 점선)
 - 음영 구간(−75dBm 이하) 자동 감지 및 경고
+- **음영 감지 시 로컬 알림**: 신호 −75dBm 이하 감지 시 Android 알림 발송 (30초 쿨다운)
 - **AP 로밍 이벤트 자동 감지**: BSSID 변경 순간을 자동 포착
 - **로밍 직후 ping 측정**: 로밍 전환 시 게이트웨이 지연(ms) 및 패킷 손실 기록
 - 차트에 로밍 지점 수직 마커 (보라색) 표시
@@ -109,6 +120,8 @@ SSID: CLOBOT-5G
 | 날짜 포맷 | intl ^0.19.0 |
 | 이미지 선택 | image_picker ^1.1.0 |
 | 파일 저장 | path_provider ^2.1.5 |
+| 로컬 DB | sqflite ^2.4.0 |
+| 알림 | flutter_local_notifications ^18.0.0 |
 
 ---
 
@@ -116,21 +129,25 @@ SSID: CLOBOT-5G
 
 ```
 lib/
-├── main.dart                  # 앱 진입점, 6탭 BottomNavigationBar
+├── main.dart                      # 앱 진입점, 6탭 BottomNavigationBar, 알림 초기화
 ├── models/
-│   ├── wifi_data.dart         # ApInfo, ConnectedNetworkInfo
-│   ├── signal_record.dart     # 음영 추적 + 로밍 이벤트 데이터 모델
-│   ├── heatmap_point.dart     # 도면 히트맵 포인트 모델
-│   └── network_quality.dart   # Jitter/PacketLoss 통신 품질 결과 모델
+│   ├── wifi_data.dart             # ApInfo, ConnectedNetworkInfo
+│   ├── signal_record.dart         # 음영 추적 + 로밍 이벤트 데이터 모델
+│   ├── heatmap_point.dart         # 도면 히트맵 포인트 모델
+│   ├── network_quality.dart       # Jitter/PacketLoss 통신 품질 결과 모델
+│   └── scan_history.dart          # 히스토리 DB 모델
 ├── services/
-│   └── wifi_service.dart      # WiFi 스캔, 연결 정보, Ping, BSSID 폴링, 품질 측정
+│   ├── wifi_service.dart          # WiFi 스캔, 연결 정보, Ping, 품질 측정, 속도 측정
+│   ├── database_service.dart      # SQLite CRUD (히스토리 저장/조회/삭제)
+│   └── notification_service.dart  # 로컬 알림 (음영 감지 알림)
 └── screens/
-    ├── connected_tab.dart     # 탭1: 연결 정보 + 통신 품질 정밀 측정
-    ├── ap_list_tab.dart       # 탭2: 주변 AP 목록
-    ├── channel_tab.dart       # 탭3: 채널 혼잡도
-    ├── shadow_tab.dart        # 탭4: 음영 추적 + 로밍 감지
-    ├── report_tab.dart        # 탭5: 리포트 생성 및 공유 (품질 섹션 포함)
-    └── heatmap_tab.dart       # 탭6: 도면 기반 신호 히트맵
+    ├── connected_tab.dart         # 탭1: 연결 정보 + 품질 측정 + 속도 측정
+    ├── ap_list_tab.dart           # 탭2: 주변 AP 목록 (Wi-Fi 7/6GHz 뱃지)
+    ├── channel_tab.dart           # 탭3: 채널 혼잡도 (2.4/5/6GHz)
+    ├── shadow_tab.dart            # 탭4: 음영 추적 + 로밍 감지 + 알림
+    ├── report_tab.dart            # 탭5: 리포트 생성 및 공유
+    ├── heatmap_tab.dart           # 탭6: 도면 기반 신호 히트맵
+    └── history_screen.dart        # 히스토리 화면 (AppBar 버튼)
 ```
 
 ---
@@ -202,6 +219,13 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.5.0 (2026-04-24)
+- **히스토리 저장 기능 추가**: 품질 측정 및 속도 측정 결과를 로컬 SQLite DB에 자동 저장
+- **히스토리 화면 (AppBar 🕐 버튼)**: RSSI 트렌드 LineChart + 등급별 통계 + 측정 기록 목록, 스와이프 삭제 지원
+- **다운로드 속도 측정 추가**: 연결 정보 탭에 "속도 측정 시작" 버튼 — Cloudflare 2MB 다운로드 기반 Mbps 실측
+- **음영 감지 알림**: 음영 추적 중 RSSI −75dBm 이하 감지 시 Android 로컬 알림 발송 (30초 쿨다운)
+- `sqflite` + `flutter_local_notifications` 의존성 추가
 
 ### v1.4.1 (2026-04-24)
 - **버그 수정: 6GHz 채널 계산 오류** — WiFi 6E/7 AP(5925–7125 MHz)가 5GHz 채널 공식으로 오계산되던 문제 수정

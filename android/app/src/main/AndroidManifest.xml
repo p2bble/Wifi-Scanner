@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Android 13+ 근처 기기 권한 -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
+    <!-- Android 13+ 알림 권한 (flutter_local_notifications) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
     <application
         android:label="WiFi 진단기"
