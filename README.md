@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.5.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.5.1-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -122,6 +122,7 @@ SSID: CLOBOT-5G
 | 파일 저장 | path_provider ^2.1.5 |
 | 로컬 DB | sqflite ^2.4.0 |
 | 알림 | flutter_local_notifications ^18.0.0 |
+| 분석 | firebase_core ^3.0.0 / firebase_analytics ^11.0.0 |
 
 ---
 
@@ -139,7 +140,8 @@ lib/
 ├── services/
 │   ├── wifi_service.dart          # WiFi 스캔, 연결 정보, Ping, 품질 측정, 속도 측정
 │   ├── database_service.dart      # SQLite CRUD (히스토리 저장/조회/삭제)
-│   └── notification_service.dart  # 로컬 알림 (음영 감지 알림)
+│   ├── notification_service.dart  # 로컬 알림 (음영 감지 알림)
+│   └── analytics_service.dart     # Firebase Analytics 이벤트 추적
 └── screens/
     ├── connected_tab.dart         # 탭1: 연결 정보 + 품질 측정 + 속도 측정
     ├── ap_list_tab.dart           # 탭2: 주변 AP 목록 (Wi-Fi 7/6GHz 뱃지)
@@ -219,6 +221,11 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.5.1 (2026-05-09)
+- **Firebase Analytics 연동**: 탭 전환, 스캔 완료, 히스토리 조회 이벤트 자동 추적
+- 앱 사용 패턴 분석 기반 마련 (어떤 탭을 가장 많이 쓰는지, AP 분포 등)
+- `firebase_core` / `firebase_analytics` 의존성 추가
 
 ### v1.5.0 (2026-04-24)
 - **히스토리 저장 기능 추가**: 품질 측정 및 속도 측정 결과를 로컬 SQLite DB에 자동 저장

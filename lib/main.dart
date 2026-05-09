@@ -1,7 +1,9 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'models/wifi_data.dart';
+import 'services/analytics_service.dart';
 import 'services/wifi_service.dart';
 import 'services/notification_service.dart';
 import 'screens/connected_tab.dart';
@@ -16,6 +18,9 @@ import 'models/network_quality.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) {
+    await Firebase.initializeApp();
+  }
   await NotificationService.init();
   runApp(const WifiScoutApp());
 }
@@ -79,6 +84,12 @@ class _HomePageState extends State<HomePage> {
         _apList = apList;
         _connectedInfo = connectedInfo;
       });
+      AnalyticsService.logScanCompleted(
+        apCount: apList.length,
+        band24: apList.where((a) => a.band == '2.4GHz').length,
+        band5: apList.where((a) => a.band == '5GHz').length,
+        band6: apList.where((a) => a.band == '6GHz').length,
+      );
     } finally {
       setState(() => _isScanning = false);
     }
@@ -121,10 +132,13 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: '측정 히스토리',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
+            onPressed: () {
+              AnalyticsService.logHistoryViewed();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HistoryScreen()),
+              );
+            },
           ),
           if (_isScanning)
             const Padding(
@@ -146,7 +160,10 @@ class _HomePageState extends State<HomePage> {
       body: tabs[_selectedIndex],
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        onDestinationSelected: (i) {
+          setState(() => _selectedIndex = i);
+          AnalyticsService.logTabSelected(i);
+        },
         destinations: [
           NavigationDestination(
             icon: Badge(

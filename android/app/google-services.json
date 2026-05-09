@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "497489432293",
+    "project_id": "wifi-scout-d0d64",
+    "storage_bucket": "wifi-scout-d0d64.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:497489432293:android:933000c01692c253490e0c",
+        "android_client_info": {
+          "package_name": "com.p2bble.wifi_scout"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAp1n9yiqUxHrjeFKeJoPpoY82VT6dMaPk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
