@@ -80,6 +80,31 @@ class WifiService {
     return null;
   }
 
+  /// 범용 ping — IP면 TCP:80(폴백: DNS), URL이면 HTTP HEAD, 도메인이면 HTTP HEAD
+  Future<int?> pingHost(String host) async {
+    if (host.isEmpty) return null;
+    final t = host.trim();
+    if (t.startsWith('http://') || t.startsWith('https://')) {
+      return _pingHttp(t);
+    }
+    if (RegExp(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$').hasMatch(t)) {
+      return pingGateway(t);
+    }
+    return _pingHttp('http://$t');
+  }
+
+  Future<int?> _pingHttp(String url) async {
+    try {
+      final sw = Stopwatch()..start();
+      final res = await http
+          .head(Uri.parse(url))
+          .timeout(const Duration(seconds: 5));
+      sw.stop();
+      if (res.statusCode < 500) return sw.elapsedMilliseconds;
+    } catch (_) {}
+    return null;
+  }
+
   Future<int?> pingInternet() async {
     // Google generate_204 — 빠르고 ICMP/방화벽 영향 없음
     const testUrl = 'http://clients3.google.com/generate_204';

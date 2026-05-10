@@ -41,10 +41,24 @@ class _ConnectedTabState extends State<ConnectedTab> {
   bool _speedTesting = false;
   bool _speedSaved = false;
 
+  // 커스텀 Ping
+  final _customHostController = TextEditingController();
+  String _customPingTarget = '';
+  int? _customPing;
+  bool _customPinging = false;
+
   @override
   void initState() {
     super.initState();
     _runPing();
+    final gw = widget.connectedInfo?.gateway ?? '';
+    if (gw.isNotEmpty) _customHostController.text = gw;
+  }
+
+  @override
+  void dispose() {
+    _customHostController.dispose();
+    super.dispose();
   }
 
   Future<void> _runPing() async {
@@ -60,6 +74,24 @@ class _ConnectedTabState extends State<ConnectedTab> {
         _gatewayPing = results[0];
         _internetPing = results[1];
         _pinging = false;
+      });
+    }
+  }
+
+  Future<void> _runCustomPing() async {
+    final host = _customHostController.text.trim();
+    if (host.isEmpty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _customPinging = true;
+      _customPing = null;
+      _customPingTarget = host;
+    });
+    final result = await _wifiService.pingHost(host);
+    if (mounted) {
+      setState(() {
+        _customPing = result;
+        _customPinging = false;
       });
     }
   }
@@ -174,6 +206,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
           _buildQualityCard(),
           const SizedBox(height: 12),
           _buildSpeedCard(),
+          const SizedBox(height: 12),
+          _buildCustomPingCard(),
         ],
       ),
     );
@@ -608,6 +642,139 @@ class _ConnectedTabState extends State<ConnectedTab> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomPingCard() {
+    final gateway = widget.connectedInfo?.gateway ?? '';
+    final presets = <(String, String)>[
+      if (gateway.isNotEmpty) ('게이트웨이', gateway),
+      ('Google DNS', '8.8.8.8'),
+      ('Cloudflare', '1.1.1.1'),
+    ];
+
+    Color resultColor;
+    String resultText;
+    IconData resultIcon;
+    if (_customPinging) {
+      resultColor = Colors.grey;
+      resultText = '측정 중...';
+      resultIcon = Icons.hourglass_empty;
+    } else if (_customPingTarget.isEmpty) {
+      resultColor = Colors.grey;
+      resultText = '';
+      resultIcon = Icons.circle_outlined;
+    } else if (_customPing == null) {
+      resultColor = Colors.red;
+      resultText = '응답 없음 ❌  ($_customPingTarget)';
+      resultIcon = Icons.cancel;
+    } else {
+      resultColor = _pingColor(_customPing);
+      final label = _customPing! < 20
+          ? '매우 좋음'
+          : _customPing! < 50
+              ? '좋음'
+              : '느림';
+      resultText = '${_customPing}ms  ·  $label  ($_customPingTarget)';
+      resultIcon = Icons.check_circle;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('커스텀 Ping 테스트',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                Tooltip(
+                  message: 'IP · 도메인 · URL 직접 입력\nIP → TCP:80, 도메인/URL → HTTP HEAD',
+                  child: Icon(Icons.info_outline,
+                      size: 16, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('대상 서버/AP에 직접 응답 시간 측정',
+                style:
+                    TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            const Divider(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: presets
+                  .map((p) => ActionChip(
+                        label: Text(p.$1,
+                            style: const TextStyle(fontSize: 12)),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => setState(
+                            () => _customHostController.text = p.$2),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _customHostController,
+                    decoration: const InputDecoration(
+                      hintText: '192.168.1.1 · google.com · https://...',
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.go,
+                    onSubmitted: (_) => _runCustomPing(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: _customPinging ? null : _runCustomPing,
+                    style: ElevatedButton.styleFrom(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 18),
+                    ),
+                    child: _customPinging
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2))
+                        : const Text('Ping'),
+                  ),
+                ),
+              ],
+            ),
+            if (_customPingTarget.isNotEmpty || _customPinging) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(resultIcon, size: 16, color: resultColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      resultText,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: resultColor),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.5.1-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.5.2-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -27,6 +27,10 @@
   - 측정 중 실시간 프로그레스바 표시 (약 3초 소요)
   - AMR 관점 3단계 등급 자동 판정: ✅ 양호 / 🟡 주의 / ❌ 위험
   - 측정 완료 시 히스토리 DB 자동 저장
+- **커스텀 Ping 테스트**: IP·도메인·URL 직접 입력하여 응답 시간 측정
+  - 프리셋 빠른 선택: 게이트웨이 / Google DNS(8.8.8.8) / Cloudflare(1.1.1.1)
+  - IP → TCP:80 소켓, 도메인/URL → HTTP HEAD 자동 구분
+  - 앱 진입 시 현재 게이트웨이 주소 자동 입력
 - **다운로드 속도 측정**: Cloudflare 2MB 파일 기반 실제 처리량(Throughput) Mbps 측정
   - 4단계 판정: 우수(≥50Mbps) / 양호(≥10Mbps) / 느림(≥1Mbps) / 매우 느림
   - 측정 결과 히스토리 DB 자동 저장
@@ -221,6 +225,13 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.5.2 (2026-05-10)
+- **커스텀 Ping 테스트 추가**: 연결 정보 탭 하단에 별도 Ping 테스트 카드 신규 추가
+- 게이트웨이 / Google DNS(8.8.8.8) / Cloudflare(1.1.1.1) 프리셋 칩으로 빠른 선택
+- IP·도메인·URL 직접 입력 지원 (IP → TCP:80 소켓, 도메인/URL → HTTP HEAD 자동 구분)
+- 앱 진입 시 현재 게이트웨이 주소 자동 세팅
+- `wifi_service.pingHost()` 범용 ping 메서드 추가
 
 ### v1.5.1 (2026-05-09)
 - **Firebase Analytics 연동**: 탭 전환, 스캔 완료, 히스토리 조회 이벤트 자동 추적
