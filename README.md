@@ -6,34 +6,37 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.5.2-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
 ## 주요 기능
 
 ### AppBar 버튼
+- **다크 모드 토글**: 아이콘 한 번으로 다크/라이트 전환, 설정 자동 저장
 - **히스토리 (🕐)**: 품질 측정 및 속도 측정 결과를 시간 순으로 조회
   - RSSI 트렌드 LineChart (최근 50회)
   - 등급별 통계 (양호/주의/위험 횟수, 평균 RSSI/속도)
+  - **CSV 내보내기**: 전체 히스토리를 CSV 파일로 공유 (날짜·SSID·등급·속도·위치 포함)
   - 스와이프로 개별 삭제, 전체 삭제 지원
 
 ### 탭 1 — 연결 정보
 - 현재 연결된 SSID, BSSID, 신호 세기(dBm), 주파수 대역, 채널 번호
 - IP 주소 / 게이트웨이
-- 빠른 Ping: 게이트웨이 TCP, 인터넷 HTTP(Google generate_204)
-- **통신 품질 정밀 측정**: 버튼 한 번으로 TCP Ping 30회 연속 측정
-  - **평균 지연** (avg ms) / **지터**(Jitter, RFC 3550 연속 편차 평균) / **패킷 손실률** (%)
-  - 측정 중 실시간 프로그레스바 표시 (약 3초 소요)
-  - AMR 관점 3단계 등급 자동 판정: ✅ 양호 / 🟡 주의 / ❌ 위험
+- **종합 WiFi 진단 (A~F 등급)**: 버튼 하나로 신호·품질·속도를 자동 순차 측정 후 종합 등급 산출
+  - 신호 강도(RSSI) / 통신 품질(Jitter·손실률) / 다운로드 속도 3항목 가중 평균
+  - A(우수) ~ F(불량) 5단계 등급 + 세부 지표 한눈에 표시
+  - **측정 위치 태그**: 거실/침실/사무실/로비/창고/공장 칩 선택 → 히스토리에 저장
   - 측정 완료 시 히스토리 DB 자동 저장
+- 빠른 Ping: 게이트웨이 TCP, 인터넷 HTTP(Google generate_204)
+- **통신 품질 정밀 측정**: TCP Ping 30회 연속 측정
+  - **평균 지연** (avg ms) / **지터**(Jitter, RFC 3550 연속 편차 평균) / **패킷 손실률** (%)
+  - AMR 관점 3단계 등급 자동 판정: ✅ 양호 / 🟡 주의 / ❌ 위험
 - **커스텀 Ping 테스트**: IP·도메인·URL 직접 입력하여 응답 시간 측정
   - 프리셋 빠른 선택: 게이트웨이 / Google DNS(8.8.8.8) / Cloudflare(1.1.1.1)
   - IP → TCP:80 소켓, 도메인/URL → HTTP HEAD 자동 구분
-  - 앱 진입 시 현재 게이트웨이 주소 자동 입력
 - **다운로드 속도 측정**: Cloudflare 2MB 파일 기반 실제 처리량(Throughput) Mbps 측정
   - 4단계 판정: 우수(≥50Mbps) / 양호(≥10Mbps) / 느림(≥1Mbps) / 매우 느림
-  - 측정 결과 히스토리 DB 자동 저장
 - 신호 등급 라벨: 매우 좋음 / 좋음 / 보통 / 나쁨 / 매우 나쁨
 
 ### 탭 2 — 주변 AP
@@ -127,6 +130,7 @@ SSID: CLOBOT-5G
 | 로컬 DB | sqflite ^2.4.0 |
 | 알림 | flutter_local_notifications ^18.0.0 |
 | 분석 | firebase_core ^3.0.0 / firebase_analytics ^11.0.0 |
+| 설정 저장 | shared_preferences ^2.3.0 |
 
 ---
 
@@ -225,6 +229,17 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.6.0 (2026-05-17)
+- **원탭 종합 진단 (A~F 등급) 추가**: 연결 정보 탭에 종합 진단 카드 신규 추가
+  - 신호 강도·통신 품질·다운로드 속도를 자동 순차 측정 후 A~F 등급 산출
+  - 각 지표(Jitter, 손실률, Mbps)를 결과 카드에 색상 코딩으로 한눈에 표시
+- **다크 모드 지원**: AppBar 토글 버튼으로 다크/라이트 전환, SharedPreferences로 자동 저장
+- **히스토리 CSV 내보내기**: 히스토리 화면 AppBar에 다운로드 버튼 추가
+  - 날짜·SSID·BSSID·RSSI·등급·지터·손실·속도·위치 포함
+- **측정 위치 태그**: 진단 시 거실/침실/사무실/로비/창고/공장 칩 선택 → 히스토리에 저장 및 표시
+- `ScanHistory` 모델에 `location` 필드 추가, DB v1→v2 마이그레이션 (기존 데이터 보존)
+- `shared_preferences ^2.3.0` 의존성 추가
 
 ### v1.5.2 (2026-05-10)
 - **커스텀 Ping 테스트 추가**: 연결 정보 탭 하단에 별도 Ping 테스트 카드 신규 추가

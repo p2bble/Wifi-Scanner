@@ -21,7 +21,7 @@ class DatabaseService {
     final path = join(dbPath, 'wifi_history.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, _) async {
         await db.execute('''
           CREATE TABLE scan_history (
@@ -37,11 +37,17 @@ class DatabaseService {
             avgMs INTEGER,
             jitterMs INTEGER,
             lossRate REAL,
-            speedMbps REAL
+            speedMbps REAL,
+            location TEXT
           )
         ''');
         await db.execute(
             'CREATE INDEX idx_measuredAt ON scan_history(measuredAt DESC)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE scan_history ADD COLUMN location TEXT');
+        }
       },
     );
   }

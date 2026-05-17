@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/scan_history.dart';
 import '../services/database_service.dart';
 
@@ -34,6 +38,48 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _deleteOne(int id) async {
     await _db.delete(id);
     await _load();
+  }
+
+  Future<void> _exportCsv() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('CSV 내보내기는 Android 앱에서 지원됩니다')),
+      );
+      return;
+    }
+    if (_records.isEmpty) return;
+
+    final buf = StringBuffer();
+    buf.writeln('날짜,SSID,BSSID,RSSI(dBm),대역,채널,WiFi표준,등급,평균지연(ms),지터(ms),패킷손실(%),속도(Mbps),위치');
+    for (final r in _records) {
+      final ssid = '"${r.ssid.replaceAll('"', '""')}"';
+      final bssid = '"${r.bssid.replaceAll('"', '""')}"';
+      final location = '"${(r.location ?? '').replaceAll('"', '""')}"';
+      buf.writeln([
+        DateFormat('yyyy-MM-dd HH:mm').format(r.measuredAt),
+        ssid,
+        bssid,
+        r.rssi,
+        r.band,
+        r.channel,
+        r.wifiStandard,
+        r.grade ?? '',
+        r.avgMs ?? '',
+        r.jitterMs ?? '',
+        r.lossRate?.toStringAsFixed(2) ?? '',
+        r.speedMbps?.toStringAsFixed(1) ?? '',
+        location,
+      ].join(','));
+    }
+
+    final now = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/wifi_history_$now.csv');
+    await file.writeAsString(buf.toString());
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/csv')],
+      subject: 'WiFi 히스토리 $now',
+    );
   }
 
   Future<void> _clearAll() async {
@@ -70,12 +116,18 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ],
         ),
         actions: [
-          if (_records.isNotEmpty)
+          if (_records.isNotEmpty) ...[
+            IconButton(
+              icon: const Icon(Icons.download),
+              tooltip: 'CSV 내보내기',
+              onPressed: _exportCsv,
+            ),
             IconButton(
               icon: const Icon(Icons.delete_sweep),
               tooltip: '전체 삭제',
               onPressed: _clearAll,
             ),
+          ],
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _load,
@@ -369,8 +421,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (r.avgMs != null) '지연 ${r.avgMs}ms',
       if (r.jitterMs != null) 'Jitter ${r.jitterMs}ms',
       if (r.lossRate != null) '손실 ${r.lossRate!.toStringAsFixed(1)}%',
-      if (r.speedMbps != null)
-        '${r.speedMbps!.toStringAsFixed(1)}Mbps',
+      if (r.speedMbps != null) '${r.speedMbps!.toStringAsFixed(1)}Mbps',
+      if (r.location != null) '📍 ${r.location}',
     ];
     return parts.join('  •  ');
   }

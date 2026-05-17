@@ -14,6 +14,7 @@ class ScanHistory {
   final int? jitterMs;
   final double? lossRate;
   final double? speedMbps;
+  final String? location;
 
   const ScanHistory({
     this.id,
@@ -29,6 +30,7 @@ class ScanHistory {
     this.jitterMs,
     this.lossRate,
     this.speedMbps,
+    this.location,
   });
 
   Map<String, dynamic> toMap() => {
@@ -45,6 +47,7 @@ class ScanHistory {
         'jitterMs': jitterMs,
         'lossRate': lossRate,
         'speedMbps': speedMbps,
+        'location': location,
       };
 
   factory ScanHistory.fromMap(Map<String, dynamic> m) => ScanHistory(
@@ -61,6 +64,7 @@ class ScanHistory {
         jitterMs: m['jitterMs'] as int?,
         lossRate: m['lossRate'] as double?,
         speedMbps: m['speedMbps'] as double?,
+        location: m['location'] as String?,
       );
 
   Color get gradeColor => switch (grade) {

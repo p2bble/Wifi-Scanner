@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'models/wifi_data.dart';
 import 'services/analytics_service.dart';
 import 'services/wifi_service.dart';
@@ -16,12 +17,19 @@ import 'screens/history_screen.dart';
 import 'models/signal_record.dart';
 import 'models/network_quality.dart';
 
+final _themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (!kIsWeb) {
     await Firebase.initializeApp();
   }
   await NotificationService.init();
+
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool('dark_mode') ?? false;
+  _themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+
   runApp(const WifiScoutApp());
 }
 
@@ -30,14 +38,25 @@ class WifiScoutApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'WiFi 진단기',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: _themeNotifier,
+      builder: (context, themeMode, _) => MaterialApp(
+        title: 'WiFi 진단기',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
+        ),
+        darkTheme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+        ),
+        themeMode: themeMode,
+        home: const HomePage(),
       ),
-      home: const HomePage(),
     );
   }
 }
@@ -63,6 +82,13 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _requestPermissionsAndScan();
+  }
+
+  Future<void> _toggleTheme() async {
+    final isDark = _themeNotifier.value == ThemeMode.dark;
+    _themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dark_mode', !isDark);
   }
 
   Future<void> _requestPermissionsAndScan() async {
@@ -129,6 +155,15 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
         actions: [
+          ValueListenableBuilder<ThemeMode>(
+            valueListenable: _themeNotifier,
+            builder: (_, mode, __) => IconButton(
+              icon: Icon(
+                  mode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode),
+              tooltip: mode == ThemeMode.dark ? '라이트 모드' : '다크 모드',
+              onPressed: _toggleTheme,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: '측정 히스토리',

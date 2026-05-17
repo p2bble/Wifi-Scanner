@@ -5,6 +5,8 @@ import '../models/wifi_data.dart';
 import '../services/database_service.dart';
 import '../services/wifi_service.dart';
 
+enum _DiagStep { idle, quality, speed, done }
+
 class ConnectedTab extends StatefulWidget {
   final ConnectedNetworkInfo? connectedInfo;
   final List<ApInfo> apList;
@@ -46,6 +48,11 @@ class _ConnectedTabState extends State<ConnectedTab> {
   String _customPingTarget = '';
   int? _customPing;
   bool _customPinging = false;
+
+  // 종합 진단
+  _DiagStep _diagStep = _DiagStep.idle;
+  String _diagGrade = '';
+  String? _diagLocation;
 
   @override
   void initState() {
@@ -141,7 +148,7 @@ class _ConnectedTabState extends State<ConnectedTab> {
     }
   }
 
-  Future<void> _saveHistory({NetworkQuality? quality, double? speedMbps}) async {
+  Future<void> _saveHistory({NetworkQuality? quality, double? speedMbps, String? location}) async {
     final info = widget.connectedInfo;
     final ap = _connectedAp;
     if (info == null) return;
@@ -159,8 +166,110 @@ class _ConnectedTabState extends State<ConnectedTab> {
       jitterMs: quality?.jitterMs,
       lossRate: quality?.lossRate,
       speedMbps: speedMbps ?? _speedMbps,
+      location: location,
     ));
     if (speedMbps != null && mounted) setState(() => _speedSaved = true);
+  }
+
+  Future<void> _runFullDiagnosis() async {
+    final gw = widget.connectedInfo?.gateway ?? '';
+    if (gw.isEmpty) return;
+
+    setState(() {
+      _diagStep = _DiagStep.quality;
+      _diagGrade = '';
+      _measuring = true;
+      _measureProgress = 0;
+      _quality = null;
+      _speedMbps = null;
+    });
+
+    final quality = await _wifiService.measureQuality(
+      gw,
+      count: _measureCount,
+      interval: const Duration(milliseconds: 100),
+      onProgress: (done, total) {
+        if (mounted) setState(() => _measureProgress = done);
+      },
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _quality = quality;
+      _measuring = false;
+      _diagStep = _DiagStep.speed;
+      _speedTesting = true;
+    });
+    widget.onQualityMeasured?.call(quality);
+
+    final mbps = await _wifiService.measureSpeed();
+    if (!mounted) return;
+
+    final rssi = _connectedAp?.rssi;
+    setState(() {
+      _speedMbps = mbps;
+      _speedTesting = false;
+      _diagGrade = _calcGrade(quality, mbps, rssi);
+      _diagStep = _DiagStep.done;
+    });
+
+    await _saveHistory(quality: quality, speedMbps: mbps, location: _diagLocation);
+  }
+
+  static String _calcGrade(NetworkQuality q, double? speed, int? rssi) {
+    int score = 0;
+    int count = 0;
+
+    if (rssi != null) {
+      count += 3;
+      if (rssi >= -60) { score += 3; }
+      else if (rssi >= -70) { score += 2; }
+      else if (rssi >= -80) { score += 1; }
+    }
+
+    count += 3;
+    switch (q.grade) {
+      case '양호': score += 3;
+      case '주의': score += 1;
+      default: break;
+    }
+
+    if (speed != null) {
+      count += 3;
+      if (speed >= 50) { score += 3; }
+      else if (speed >= 10) { score += 2; }
+      else if (speed >= 1) { score += 1; }
+    }
+
+    if (count == 0) return 'F';
+    final pct = score / count;
+    if (pct >= 0.9) return 'A';
+    if (pct >= 0.7) return 'B';
+    if (pct >= 0.5) return 'C';
+    if (pct >= 0.3) return 'D';
+    return 'F';
+  }
+
+  static Color _gradeColor(String grade) => switch (grade) {
+    'A' => Colors.green,
+    'B' => Colors.blue,
+    'C' => Colors.orange,
+    'D' => Colors.deepOrange,
+    _ => Colors.red,
+  };
+
+  static String _gradeLabel(String grade) => switch (grade) {
+    'A' => '우수 — 최적 상태',
+    'B' => '양호 — 정상 사용 가능',
+    'C' => '보통 — 일부 서비스 영향 가능',
+    'D' => '미흡 — 개선 필요',
+    _ => '불량 — 즉시 조치 필요',
+  };
+
+  static Color _speedGradeColor(double mbps) {
+    if (mbps >= 50) return Colors.green;
+    if (mbps >= 10) return Colors.orange;
+    return Colors.red;
   }
 
   ApInfo? get _connectedAp {
@@ -198,6 +307,8 @@ class _ConnectedTabState extends State<ConnectedTab> {
         padding: const EdgeInsets.all(16),
         children: [
           _buildSignalCard(info, ap),
+          const SizedBox(height: 12),
+          _buildFullDiagnosisCard(),
           const SizedBox(height: 12),
           _buildNetworkCard(info),
           const SizedBox(height: 12),
@@ -643,6 +754,195 @@ class _ConnectedTabState extends State<ConnectedTab> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFullDiagnosisCard() {
+    final bool canDiagnose = widget.connectedInfo?.gateway.isNotEmpty == true;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.health_and_safety, size: 22),
+                SizedBox(width: 8),
+                Text('종합 WiFi 진단',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('신호 · 품질 · 속도 자동 측정 후 A~F 등급 산출',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            const Divider(height: 20),
+            if (_diagStep == _DiagStep.idle) ...[
+              _buildDiagLocationPicker(),
+              const SizedBox(height: 14),
+              _buildDiagStartButton(canDiagnose),
+            ] else if (_diagStep == _DiagStep.quality) ...[
+              _buildDiagProgress('1/2  통신 품질 측정 중...', '$_measureProgress / $_measureCount 완료'),
+            ] else if (_diagStep == _DiagStep.speed) ...[
+              _buildDiagProgress('2/2  속도 측정 중...', 'Cloudflare 서버 다운로드 중 (최대 20초)'),
+            ] else ...[
+              _buildDiagResult(),
+              const SizedBox(height: 14),
+              _buildDiagLocationPicker(),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: canDiagnose ? _runFullDiagnosis : null,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('다시 진단'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiagProgress(String step, String sub) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          const SizedBox(width: 10),
+          Text(step, style: const TextStyle(fontSize: 13, color: Colors.blue)),
+        ]),
+        const SizedBox(height: 6),
+        Text(sub, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+      ],
+    );
+  }
+
+  Widget _buildDiagResult() {
+    final gradeColor = _gradeColor(_diagGrade);
+    final q = _quality;
+    final speed = _speedMbps;
+    return Row(
+      children: [
+        Container(
+          width: 72,
+          height: 72,
+          decoration: BoxDecoration(
+            color: gradeColor.withAlpha(25),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: gradeColor.withAlpha(100), width: 2),
+          ),
+          child: Center(
+            child: Text(
+              _diagGrade,
+              style: TextStyle(
+                  fontSize: 38,
+                  fontWeight: FontWeight.bold,
+                  color: gradeColor),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _gradeLabel(_diagGrade),
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: gradeColor),
+              ),
+              const SizedBox(height: 6),
+              if (_connectedAp != null)
+                _diagMetric('신호', '${_connectedAp!.rssi}dBm  ${_connectedAp!.signalEmoji}',
+                    _pingColor(_connectedAp!.rssi < -80 ? 100 : _connectedAp!.rssi < -70 ? 40 : 5)),
+              if (q != null) ...[
+                _diagMetric('지터', q.jitterMs != null ? '${q.jitterMs}ms' : '-', _jitterColor(q.jitterMs)),
+                _diagMetric('패킷손실', q.lossLabel, q.lossColor),
+              ],
+              if (speed != null)
+                _diagMetric('속도', '${speed.toStringAsFixed(1)} Mbps', _speedGradeColor(speed)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _diagMetric(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 60,
+            child: Text(label,
+                style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: color),
+                overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagLocationPicker() {
+    const presets = ['거실', '침실', '사무실', '로비', '창고', '공장'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('측정 위치',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            const SizedBox(width: 6),
+            Text('(선택사항)',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: presets
+              .map((loc) => ChoiceChip(
+                    label: Text(loc, style: const TextStyle(fontSize: 12)),
+                    selected: _diagLocation == loc,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (v) =>
+                        setState(() => _diagLocation = v ? loc : null),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiagStartButton(bool canDiagnose) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: canDiagnose ? _runFullDiagnosis : null,
+        icon: const Icon(Icons.health_and_safety, size: 18),
+        label: const Text('종합 진단 시작'),
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
