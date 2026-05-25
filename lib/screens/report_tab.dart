@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../models/wifi_data.dart';
 import '../models/signal_record.dart';
 import '../models/network_quality.dart';
+import '../services/analytics_service.dart';
+import '../services/remote_config_service.dart';
 
 enum EnvType { home, office, factory }
 
@@ -137,7 +139,7 @@ class _ReportTabState extends State<ReportTab> {
         ch5Map.values.where((v) => v >= 3).length;
     final records = widget.shadowRecords;
     final shadowCount =
-        records.where((r) => r.rssi < -75).length;
+        records.where((r) => r.rssi < RemoteConfigService.shadowRssiThreshold).length;
 
     final buf = StringBuffer();
     buf.writeln('📡 현장 WiFi 환경 리포트');
@@ -354,7 +356,10 @@ class _ReportTabState extends State<ReportTab> {
         ),
         const SizedBox(height: 16),
         ElevatedButton.icon(
-          onPressed: () => Share.share(report),
+          onPressed: () {
+            AnalyticsService.logReportShared();
+            Share.share(report);
+          },
           icon: const Icon(Icons.share),
           label: const Text('리포트 공유'),
           style: ElevatedButton.styleFrom(

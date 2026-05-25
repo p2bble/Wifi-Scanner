@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/heatmap_point.dart';
 import '../models/wifi_data.dart';
+import '../services/analytics_service.dart';
 
 class HeatmapTab extends StatefulWidget {
   final ConnectedNetworkInfo? connectedInfo;
@@ -108,6 +109,7 @@ class _HeatmapTabState extends State<HeatmapTab> {
         note: _noteController.text.trim(),
       ));
     });
+    AnalyticsService.logHeatmapPointAdded();
     if (_noteController.text.isNotEmpty) _noteController.clear();
   }
 

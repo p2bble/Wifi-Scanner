@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:wifi_scan/wifi_scan.dart';
 import '../models/signal_record.dart';
 import '../models/wifi_data.dart';
+import '../services/analytics_service.dart';
 import '../services/notification_service.dart';
+import '../services/remote_config_service.dart';
 import '../services/wifi_service.dart';
 
 class ShadowTab extends StatefulWidget {
@@ -57,6 +59,7 @@ class _ShadowTabState extends State<ShadowTab> {
   void _startRecording() {
     _lastBssid = widget.connectedInfo?.bssid ?? '';
     setState(() => _isRecording = true);
+    AnalyticsService.logShadowTrackingStarted();
     _timer = Timer.periodic(const Duration(seconds: 2), (_) async {
       final rssi = await _getCurrentRssi();
       if (rssi == null || !mounted) return;
@@ -81,7 +84,7 @@ class _ShadowTabState extends State<ShadowTab> {
       if (bssid.isNotEmpty) _lastBssid = bssid;
 
       // 음영 감지 시 로컬 알림 발송 (30초 쿨다운)
-      if (rssi < -75) {
+      if (rssi < RemoteConfigService.shadowRssiThreshold) {
         NotificationService.showShadowAlert(rssi);
       }
 
@@ -144,7 +147,7 @@ class _ShadowTabState extends State<ShadowTab> {
   }
 
   List<SignalRecord> get _shadowPoints =>
-      _records.where((r) => r.rssi < -75).toList();
+      _records.where((r) => r.rssi < RemoteConfigService.shadowRssiThreshold).toList();
 
   List<MapEntry<int, SignalRecord>> get _roamingEvents => _records
       .asMap()
@@ -331,7 +334,7 @@ class _ShadowTabState extends State<ShadowTab> {
                           }
                           return FlDotCirclePainter(
                             radius: 3,
-                            color: spot.y < -75 ? Colors.red : Colors.blue,
+                            color: spot.y < RemoteConfigService.shadowRssiThreshold ? Colors.red : Colors.blue,
                             strokeWidth: 0,
                             strokeColor: Colors.transparent,
                           );
@@ -342,14 +345,14 @@ class _ShadowTabState extends State<ShadowTab> {
                   extraLinesData: ExtraLinesData(
                     horizontalLines: [
                       HorizontalLine(
-                        y: -75,
+                        y: RemoteConfigService.shadowRssiThreshold.toDouble(),
                         color: Colors.red.withAlpha(128),
                         strokeWidth: 1,
                         dashArray: [6, 4],
                         label: HorizontalLineLabel(
                           show: true,
                           alignment: Alignment.topRight,
-                          labelResolver: (_) => '음영 기준 -75dBm',
+                          labelResolver: (_) => '음영 기준 ${RemoteConfigService.shadowRssiThreshold}dBm',
                           style: const TextStyle(
                               fontSize: 10, color: Colors.red),
                         ),
@@ -565,7 +568,7 @@ class _ShadowTabState extends State<ShadowTab> {
             itemCount: reversed.length > 30 ? 30 : reversed.length,
             itemBuilder: (context, index) {
               final r = reversed[index];
-              final isShadow = r.rssi < -75;
+              final isShadow = r.rssi < RemoteConfigService.shadowRssiThreshold;
               return ListTile(
                 dense: true,
                 leading: r.isRoamingEvent

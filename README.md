@@ -6,7 +6,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)](https://flutter.dev)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web%20PWA-green)](https://github.com/p2bble/Wifi-Scanner)
-[![Version](https://img.shields.io/badge/Version-1.6.0-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
+[![Version](https://img.shields.io/badge/Version-1.6.2-orange)](https://github.com/p2bble/Wifi-Scanner/releases)
 
 ---
 
@@ -129,7 +129,9 @@ SSID: CLOBOT-5G
 | 파일 저장 | path_provider ^2.1.5 |
 | 로컬 DB | sqflite ^2.4.0 |
 | 알림 | flutter_local_notifications ^18.0.0 |
-| 분석 | firebase_core ^3.0.0 / firebase_analytics ^11.0.0 |
+| Firebase Analytics | firebase_analytics ^11.0.0 |
+| Firebase Crashlytics | firebase_crashlytics ^4.0.0 |
+| Firebase Remote Config | firebase_remote_config ^5.0.0 |
 | 설정 저장 | shared_preferences ^2.3.0 |
 
 ---
@@ -149,7 +151,8 @@ lib/
 │   ├── wifi_service.dart          # WiFi 스캔, 연결 정보, Ping, 품질 측정, 속도 측정
 │   ├── database_service.dart      # SQLite CRUD (히스토리 저장/조회/삭제)
 │   ├── notification_service.dart  # 로컬 알림 (음영 감지 알림)
-│   └── analytics_service.dart     # Firebase Analytics 이벤트 추적
+│   ├── analytics_service.dart     # Firebase Analytics 이벤트 추적
+│   └── remote_config_service.dart # Firebase Remote Config (음영 기준값, ping 횟수 원격 제어)
 └── screens/
     ├── connected_tab.dart         # 탭1: 연결 정보 + 품질 측정 + 속도 측정
     ├── ap_list_tab.dart           # 탭2: 주변 AP 목록 (Wi-Fi 7/6GHz 뱃지)
@@ -229,6 +232,24 @@ flutter build web --release --base-href "/wifi_scout/"
 ---
 
 ## 버전 히스토리
+
+### v1.6.2 (2026-05-25)
+- **Firebase Remote Config 연동**: 앱 업데이트 없이 주요 설정값 원격 변경 가능
+  - `shadow_rssi_threshold`: 음영 감지 RSSI 기준값 (기본 −75dBm) — 환경에 따라 실시간 조정
+  - `quality_ping_count`: 품질 측정 ping 횟수 (기본 30회) — 정밀도/속도 트레이드오프 원격 제어
+- `firebase_remote_config ^5.0.0` 의존성 추가
+- `RemoteConfigService` 신규 추가 (1시간 캐시, kIsWeb 가드)
+
+### v1.6.1 (2026-05-25)
+- **Firebase Crashlytics 연동**: 앱 충돌 자동 감지 및 리포트 수집
+  - Flutter 프레임워크 에러 (`FlutterError.onError`) 자동 전송
+  - 비동기 미처리 예외 (`runZonedGuarded`) 자동 전송
+  - 릴리스 빌드 ProGuard 매핑 파일 자동 업로드 (가독성 있는 스택 트레이스)
+- `firebase_crashlytics ^4.0.0` 의존성 추가
+- **Firebase Analytics 이벤트 전면 연결**: 기존 미연결 이벤트 5종 각 탭에 연결
+  - `quality_measured` (품질 측정 완료), `speed_tested` (속도 측정 완료)
+  - `shadow_tracking_started` (음영 추적 시작), `report_shared` (리포트 공유)
+  - `heatmap_point_added` (히트맵 핀 추가)
 
 ### v1.6.0 (2026-05-17)
 - **원탭 종합 진단 (A~F 등급) 추가**: 연결 정보 탭에 종합 진단 카드 신규 추가

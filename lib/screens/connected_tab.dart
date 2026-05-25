@@ -3,6 +3,8 @@ import '../models/network_quality.dart';
 import '../models/scan_history.dart';
 import '../models/wifi_data.dart';
 import '../services/database_service.dart';
+import '../services/analytics_service.dart';
+import '../services/remote_config_service.dart';
 import '../services/wifi_service.dart';
 
 enum _DiagStep { idle, quality, speed, done }
@@ -36,7 +38,7 @@ class _ConnectedTabState extends State<ConnectedTab> {
   NetworkQuality? _quality;
   bool _measuring = false;
   int _measureProgress = 0;
-  static const _measureCount = 30;
+  int get _measureCount => RemoteConfigService.qualityPingCount;
 
   // 속도 측정
   double? _speedMbps;
@@ -128,6 +130,11 @@ class _ConnectedTabState extends State<ConnectedTab> {
         _measuring = false;
       });
       widget.onQualityMeasured?.call(result);
+      AnalyticsService.logQualityMeasured(
+        avgMs: result.avgMs?.toDouble() ?? 0,
+        jitterMs: result.jitterMs?.toDouble() ?? 0,
+        packetLoss: result.lossRate,
+      );
       _saveHistory(quality: result);
     }
   }
@@ -144,7 +151,10 @@ class _ConnectedTabState extends State<ConnectedTab> {
         _speedMbps = mbps;
         _speedTesting = false;
       });
-      if (mbps != null) _saveHistory(speedMbps: mbps);
+      if (mbps != null) {
+        AnalyticsService.logSpeedTested(mbps);
+        _saveHistory(speedMbps: mbps);
+      }
     }
   }
 
@@ -201,6 +211,11 @@ class _ConnectedTabState extends State<ConnectedTab> {
       _speedTesting = true;
     });
     widget.onQualityMeasured?.call(quality);
+    AnalyticsService.logQualityMeasured(
+      avgMs: quality.avgMs?.toDouble() ?? 0,
+      jitterMs: quality.jitterMs?.toDouble() ?? 0,
+      packetLoss: quality.lossRate,
+    );
 
     final mbps = await _wifiService.measureSpeed();
     if (!mounted) return;
@@ -213,6 +228,7 @@ class _ConnectedTabState extends State<ConnectedTab> {
       _diagStep = _DiagStep.done;
     });
 
+    if (mbps != null) AnalyticsService.logSpeedTested(mbps);
     await _saveHistory(quality: quality, speedMbps: mbps, location: _diagLocation);
   }
 
@@ -660,7 +676,7 @@ class _ConnectedTabState extends State<ConnectedTab> {
   Widget _buildSpeedCard() {
     String speedText;
     Color speedColor;
-    String? speedSub;
+    String speedSub = '';
 
     if (_speedTesting) {
       speedText = '측정 중...';
@@ -731,7 +747,7 @@ class _ConnectedTabState extends State<ConnectedTab> {
                 ),
               ],
             ),
-            if (speedSub != null) ...[
+            if (speedSub.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(speedSub,
                   style:

@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models/wifi_data.dart';
 import 'services/analytics_service.dart';
+import 'services/remote_config_service.dart';
 import 'services/wifi_service.dart';
 import 'services/notification_service.dart';
 import 'screens/connected_tab.dart';
@@ -19,18 +22,24 @@ import 'models/network_quality.dart';
 
 final _themeNotifier = ValueNotifier<ThemeMode>(ThemeMode.light);
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  if (!kIsWeb) {
-    await Firebase.initializeApp();
-  }
-  await NotificationService.init();
+void main() {
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    if (!kIsWeb) {
+      await Firebase.initializeApp();
+      FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+      await RemoteConfigService.init();
+    }
+    await NotificationService.init();
 
-  final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('dark_mode') ?? false;
-  _themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+    final prefs = await SharedPreferences.getInstance();
+    final isDark = prefs.getBool('dark_mode') ?? false;
+    _themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
 
-  runApp(const WifiScoutApp());
+    runApp(const WifiScoutApp());
+  }, (error, stack) {
+    if (!kIsWeb) FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+  });
 }
 
 class WifiScoutApp extends StatelessWidget {
