@@ -17,6 +17,7 @@ import 'screens/report_tab.dart';
 import 'screens/shadow_tab.dart';
 import 'screens/heatmap_tab.dart';
 import 'screens/history_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'models/signal_record.dart';
 import 'models/network_quality.dart';
 
@@ -35,15 +36,17 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final isDark = prefs.getBool('dark_mode') ?? false;
     _themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+    final onboardingDone = prefs.getBool('onboarding_done') ?? false;
 
-    runApp(const WifiScoutApp());
+    runApp(WifiScoutApp(showOnboarding: !onboardingDone));
   }, (error, stack) {
     if (!kIsWeb) FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
   });
 }
 
 class WifiScoutApp extends StatelessWidget {
-  const WifiScoutApp({super.key});
+  final bool showOnboarding;
+  const WifiScoutApp({super.key, this.showOnboarding = false});
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +67,10 @@ class WifiScoutApp extends StatelessWidget {
           useMaterial3: true,
         ),
         themeMode: themeMode,
-        home: const HomePage(),
+        home: showOnboarding ? const OnboardingScreen() : const HomePage(),
+        routes: {
+          '/home': (_) => const HomePage(),
+        },
       ),
     );
   }
